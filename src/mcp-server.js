@@ -11,7 +11,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import express from 'express';
 import cors from 'cors';
 import {
@@ -238,130 +238,6 @@ async function handleHealthCheck(args, requestId) {
 }
 
 /**
- * Set up MCP request handlers for a server instance
- */
-function setupMcpHandlers(mcpServer) {
-  // Tool Discovery Endpoint
-  mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
-    logger.info('MCP tool discovery requested');
-    
-    return {
-      tools: [
-        {
-          name: "health_check",
-          description: "Comprehensive system health monitoring for MCP server and dependencies",
-          inputSchema: {
-            type: "object",
-            properties: {
-              includeDetails: {
-                type: "boolean",
-                description: "Include detailed check results for each component",
-                default: true
-              },
-              format: {
-                type: "string",
-                enum: ["summary", "detailed", "json"],
-                description: "Output format for health report",
-                default: "summary"
-              },
-              skipCache: {
-                type: "boolean", 
-                description: "Skip cached results and force fresh health check",
-                default: false
-              }
-            },
-            additionalProperties: false
-          }
-        },
-        
-        ...cardToolSchemas,
-        ...transactionToolSchemas,
-        ...patternAnalysisToolSchemas,
-        ...realtimeIntelligenceToolSchemas
-      ]
-    };
-  });
-
-  // Tool Execution Endpoint
-  mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    const requestId = `mcp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    logger.info({ 
-      requestId, 
-      toolName: name, 
-      args: sanitizeArgs(args) 
-    }, 'MCP tool execution requested');
-
-    try {
-      switch (name) {
-        case 'health_check':
-          return await handleHealthCheck(args, requestId);
-          
-        // Card Management Tools
-        case 'list_available_cards':
-          return await cardHandlers.handleListAvailableCards(args, requestId);
-        case 'get_card_details':
-          return await cardHandlers.handleGetCardDetails(args, requestId);
-        case 'create_honeypot_card':
-          return await cardHandlers.handleCreateHoneypotCard(args, requestId);
-        case 'update_card_limits':
-          return await cardHandlers.handleUpdateCardLimits(args, requestId);
-        case 'toggle_card_state':
-          return await cardHandlers.handleToggleCardState(args, requestId);
-          
-        // Transaction Query Tools
-        case 'get_transaction':
-          return await transactionHandlers.handleGetTransaction(args, requestId);
-        case 'search_transactions':
-          return await transactionHandlers.handleSearchTransactions(args, requestId);
-        case 'get_recent_transactions':
-          return await transactionHandlers.handleGetRecentTransactions(args, requestId);
-        case 'get_transactions_by_merchant':
-          return await transactionHandlers.handleGetTransactionsByMerchant(args, requestId);
-        case 'get_transaction_details':
-          return await transactionHandlers.handleGetTransactionDetails(args, requestId);
-          
-        // Pattern Analysis Tools
-        case 'analyze_transaction_patterns':
-          return await patternAnalysisHandlers.handleAnalyzeTransactionPatterns(args, requestId);
-        case 'detect_fraud_indicators':
-          return await patternAnalysisHandlers.handleDetectFraudIndicators(args, requestId);
-        case 'generate_merchant_intelligence':
-          return await patternAnalysisHandlers.handleGenerateMerchantIntelligence(args, requestId);
-        case 'perform_risk_assessment':
-          return await patternAnalysisHandlers.handlePerformRiskAssessment(args, requestId);
-          
-        // Real-time Intelligence Tools
-        case 'subscribe_to_alerts':
-          return await realtimeIntelligenceHandlers.handleSubscribeToAlerts(args, requestId);
-        case 'get_live_transaction_feed':
-          return await realtimeIntelligenceHandlers.handleGetLiveTransactionFeed(args, requestId);
-        case 'analyze_spending_patterns':
-          return await realtimeIntelligenceHandlers.handleAnalyzeSpendingPatterns(args, requestId);
-        case 'generate_verification_questions':
-          return await realtimeIntelligenceHandlers.handleGenerateVerificationQuestions(args, requestId);
-          
-        default:
-          const error = new Error(`Unknown tool: ${name}`);
-          logger.error({ requestId, toolName: name }, error.message);
-          throw error;
-      }
-      
-    } catch (error) {
-      logger.error({ 
-        requestId, 
-        toolName: name, 
-        error: error.message,
-        stack: error.stack 
-      }, 'MCP tool execution failed');
-      
-      throw error;
-    }
-  });
-}
-
-/**
  * Sanitize arguments for logging (remove sensitive data)
  */
 function sanitizeArgs(args) {
@@ -402,42 +278,48 @@ async function main() {
         res.json({ status: 'healthy', timestamp: new Date().toISOString() });
       });
       
-      // MCP endpoint for AI agents (stateless mode)
-      app.post('/mcp', async (req, res) => {
+      // MCP endpoint for AI agents  
+      app.get('/mcp', async (req, res) => {
         try {
-          // Create new instances for each request to avoid ID collisions
-          const mcpServer = new Server(
-            {
-              name: "honeypot-transaction-intelligence",
-              version: "1.0.0",
-              description: "AI-powered fraud detection using Lithic honeypot cards for real-time scammer verification"
-            },
-            {
-              capabilities: {
-                tools: {},
-                resources: {},
-                prompts: {}
-              }
-            }
-          );
+          logger.info('SSE connection established for MCP');
           
-          // Set up all the same request handlers as the main server
-          setupMcpHandlers(mcpServer);
-          
-          const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: undefined, // Stateless mode
-          });
+          // Create new transport for this connection
+          const transport = new SSEServerTransport('/mcp', res);
           
           res.on('close', () => {
-            transport.close();
-            mcpServer.close();
+            logger.info('SSE connection closed');
           });
           
-          await mcpServer.connect(transport);
-          await transport.handleRequest(req, res, req.body);
+          await server.connect(transport);
           
         } catch (error) {
-          logger.error('Error handling MCP request:', error);
+          logger.error('Error establishing SSE connection:', error);
+          if (!res.headersSent) {
+            res.status(500).json({
+              error: 'Failed to establish SSE connection'
+            });
+          }
+        }
+      });
+      
+      // Handle POST requests for MCP messages
+      app.post('/mcp', async (req, res) => {
+        try {
+          logger.info('Received MCP POST request');
+          
+          // For now, return method not allowed for POST
+          // The SSE transport should handle all communication via GET
+          res.status(405).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Use GET for SSE connection, not POST"
+            },
+            id: null
+          });
+          
+        } catch (error) {
+          logger.error('Error handling MCP POST request:', error);
           if (!res.headersSent) {
             res.status(500).json({
               jsonrpc: '2.0',
@@ -449,30 +331,6 @@ async function main() {
             });
           }
         }
-      });
-      
-      // Handle GET requests (method not allowed for stateless mode)
-      app.get('/mcp', (req, res) => {
-        res.status(405).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Method not allowed. Use POST for MCP requests."
-          },
-          id: null
-        });
-      });
-      
-      // Handle DELETE requests (method not allowed for stateless mode) 
-      app.delete('/mcp', (req, res) => {
-        res.status(405).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Method not allowed. Use POST for MCP requests."
-          },
-          id: null
-        });
       });
       
       const port = process.env.PORT || 3000;
