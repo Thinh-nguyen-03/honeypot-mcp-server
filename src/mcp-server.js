@@ -278,16 +278,23 @@ async function main() {
         res.json({ status: 'healthy', timestamp: new Date().toISOString() });
       });
       
-      // MCP endpoint for AI agents  
+      // Store SSE transports by session ID
+      const sseTransports = {};
+      
+      // SSE endpoint for establishing connection
       app.get('/mcp', async (req, res) => {
         try {
-          logger.info('SSE connection established for MCP');
+          logger.info('Establishing SSE connection for MCP');
           
-          // Create new transport for this connection
-          const transport = new SSEServerTransport('/mcp', res);
+          // Create transport with separate message endpoint
+          const transport = new SSEServerTransport('/mcp/messages', res);
+          
+          // Store transport by session ID
+          sseTransports[transport.sessionId] = transport;
           
           res.on('close', () => {
-            logger.info('SSE connection closed');
+            logger.info(`SSE connection closed for session ${transport.sessionId}`);
+            delete sseTransports[transport.sessionId];
           });
           
           await server.connect(transport);
@@ -302,24 +309,24 @@ async function main() {
         }
       });
       
-      // Handle POST requests for MCP messages
-      app.post('/mcp', async (req, res) => {
+      // Message endpoint for handling client POST messages
+      app.post('/mcp/messages', async (req, res) => {
         try {
-          logger.info('Received MCP POST request');
+          const sessionId = req.query.sessionId;
+          logger.info(`Received MCP message for session ${sessionId}`);
           
-          // For now, return method not allowed for POST
-          // The SSE transport should handle all communication via GET
-          res.status(405).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Use GET for SSE connection, not POST"
-            },
-            id: null
-          });
+          const transport = sseTransports[sessionId];
+          if (transport) {
+            await transport.handlePostMessage(req, res, req.body);
+          } else {
+            logger.warn(`No transport found for session ${sessionId}`);
+            res.status(400).json({
+              error: 'No transport found for sessionId'
+            });
+          }
           
         } catch (error) {
-          logger.error('Error handling MCP POST request:', error);
+          logger.error('Error handling MCP message:', error);
           if (!res.headersSent) {
             res.status(500).json({
               jsonrpc: '2.0',
