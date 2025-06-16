@@ -350,51 +350,37 @@ async function main() {
             // Reuse existing transport
             transport = transports[sessionId];
             logger.info(`Reusing existing transport for session ${sessionId}`);
-          } else if (!sessionId && req.body?.method === 'initialize') {
-            // New initialization request - create transport with proper session handling
-            logger.info('Creating new StreamableHTTP transport for initialization');
+          } else {
+            // Create new transport for any request without valid session
+            logger.info('Creating new StreamableHTTP transport', { 
+              hasSessionId: !!sessionId, 
+              method: req.body?.method 
+            });
             
-            // Create transport with session management
+            // Generate a new session ID
+            const newSessionId = randomUUID();
+            
+            // Create transport with the generated session ID
             transport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => randomUUID()
+              sessionIdGenerator: () => newSessionId
             });
 
             // Create and connect server to transport BEFORE handling any requests
             const server = createMcpServer();
             await server.connect(transport);
             
-            // Store the transport immediately with the generated session ID
-            if (transport.sessionId) {
-              transports[transport.sessionId] = transport;
-              logger.info(`Transport stored with session ID: ${transport.sessionId}`);
-            } else {
-              logger.warn('Transport created but no session ID available');
-            }
+            // Store the transport immediately with the session ID
+            transports[newSessionId] = transport;
+            logger.info(`Transport created and stored with session ID: ${newSessionId}`);
+
+            // Set the session ID header in the response
+            res.setHeader('mcp-session-id', newSessionId);
 
             // Clean up transport when closed
             transport.onclose = () => {
-              logger.info(`Transport closed for session ${transport.sessionId}`);
-              if (transport.sessionId) {
-                delete transports[transport.sessionId];
-              }
+              logger.info(`Transport closed for session ${newSessionId}`);
+              delete transports[newSessionId];
             };
-            
-          } else {
-            // Invalid request
-            logger.warn('Invalid request - no valid session ID provided', { 
-              hasSessionId: !!sessionId, 
-              isInitialize: req.body?.method === 'initialize',
-              method: req.body?.method 
-            });
-            res.status(400).json({
-              jsonrpc: '2.0',
-              error: {
-                code: -32000,
-                message: 'Bad Request: No valid session ID provided',
-              },
-              id: null,
-            });
-            return;
           }
 
           // Ensure transport is ready before handling request
@@ -441,21 +427,37 @@ async function main() {
         try {
           logger.info('Received GET request to /mcp for StreamableHTTP SSE notifications');
           
-          const sessionId = req.headers['mcp-session-id'];
-          if (!sessionId || !transports[sessionId]) {
-            logger.warn('Invalid or missing session ID for GET request', {
-              sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : 'none',
-              availableSessions: Object.keys(transports).length
-            });
-            res.status(400).send('Invalid or missing session ID');
+          const sessionId = req.headers['mcp-session-id'] || req.query.sessionId;
+          
+          if (!sessionId) {
+            logger.warn('No session ID provided in GET request');
+            res.status(400).send('Session ID required');
             return;
           }
           
-          const transport = transports[sessionId];
+          let transport = transports[sessionId];
+          
           if (!transport) {
-            logger.error('Transport not found for session ID', { sessionId });
-            res.status(404).send('Session not found');
-            return;
+            logger.warn('Transport not found for session ID, creating new one', { 
+              sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : 'none',
+              availableSessions: Object.keys(transports).length
+            });
+            
+            // Create a new transport for this session if it doesn't exist
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => sessionId
+            });
+
+            const server = createMcpServer();
+            await server.connect(transport);
+            
+            transports[sessionId] = transport;
+            logger.info(`New transport created for session: ${sessionId}`);
+
+            transport.onclose = () => {
+              logger.info(`Transport closed for session ${sessionId}`);
+              delete transports[sessionId];
+            };
           }
           
           await transport.handleRequest(req, res);
