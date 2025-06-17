@@ -301,7 +301,7 @@ async function main() {
       app.use(express.json());
       
       // Environment variable validation
-      const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'LITHIC_API_KEY'];
+      const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'LITHIC_API_KEY'];
       const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
       
       if (missingVars.length > 0) {
@@ -427,23 +427,26 @@ async function main() {
         try {
           logger.info('Received GET request to /mcp for StreamableHTTP SSE notifications');
           
-          const sessionId = req.headers['mcp-session-id'] || req.query.sessionId;
+          // Make session ID optional for Streamable HTTP compatibility
+          let sessionId = req.headers['mcp-session-id'] || req.query.sessionId;
           
+          // If no session ID provided, generate one for Streamable HTTP compatibility
           if (!sessionId) {
-            logger.warn('No session ID provided in GET request');
-            res.status(400).send('Session ID required');
-            return;
+            sessionId = randomUUID();
+            logger.info('No session ID provided, generating new one for Streamable HTTP compatibility', { 
+              newSessionId: `${sessionId.substring(0, 8)}...` 
+            });
           }
           
           let transport = transports[sessionId];
           
           if (!transport) {
-            logger.warn('Transport not found for session ID, creating new one', { 
+            logger.info('Creating new transport for session', { 
               sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : 'none',
               availableSessions: Object.keys(transports).length
             });
             
-            // Create a new transport for this session if it doesn't exist
+            // Create a new transport for this session
             transport = new StreamableHTTPServerTransport({
               sessionIdGenerator: () => sessionId
             });
@@ -452,10 +455,13 @@ async function main() {
             await server.connect(transport);
             
             transports[sessionId] = transport;
-            logger.info(`New transport created for session: ${sessionId}`);
+            logger.info(`New transport created and stored for session: ${sessionId.substring(0, 8)}...`);
+
+            // Set session ID header for client tracking
+            res.setHeader('mcp-session-id', sessionId);
 
             transport.onclose = () => {
-              logger.info(`Transport closed for session ${sessionId}`);
+              logger.info(`Transport closed for session ${sessionId.substring(0, 8)}...`);
               delete transports[sessionId];
             };
           }
@@ -466,7 +472,7 @@ async function main() {
           logger.error('Error handling StreamableHTTP GET request:', {
             error: error.message,
             stack: error.stack,
-            sessionId: req.headers['mcp-session-id']
+            sessionId: req.headers['mcp-session-id'] || 'generated'
           });
           
           if (!res.headersSent) {

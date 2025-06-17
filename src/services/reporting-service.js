@@ -1,4 +1,5 @@
 import { supabase_client } from "../config/supabase-client.js";
+import { lookupMCC } from "./mcc-service.js";
 import logger from "../utils/logger.js";
 
 // Query classification keywords for natural language processing (moved from controller)
@@ -27,17 +28,28 @@ const queryClassification = {
 /**
  * Get recent transactions formatted for conversational AI agents or similar use case.
  * @param {number} [limit=5] - Number of recent transactions to fetch.
+ * @param {string} [cardToken] - Optional card token to filter transactions by specific card.
  * @returns {Promise<Array>} Array of formatted transaction objects.
  * @throws {Error} If fetching from Supabase fails.
  */
-export async function getRecentTransactionsForAgent(limit = 5) {
+export async function getRecentTransactionsForAgent(limit = 5, cardToken = null) {
   try {
-    logger.debug(`Fetching ${limit} recent transactions for agent.`);
-    const { data, error } = await supabase_client
+    logger.debug(`Fetching ${limit} recent transactions for agent${cardToken ? ` for card ${cardToken.substring(0, 8)}...` : ''}.`);
+    
+    // Build query with optional card token filtering
+    let query = supabase_client
       .from("transaction_details")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(limit);
+    
+    // Add card token filter if provided
+    if (cardToken && typeof cardToken === 'string') {
+      query = query.eq("card_token", cardToken);
+      logger.debug(`Applied card token filter: ${cardToken.substring(0, 8)}...`);
+    }
+    
+    const { data, error } = await query;
 
     if (error) {
       logger.error("Error fetching recent transactions for agent:", error);
@@ -504,7 +516,7 @@ export function filterTransactionsByAmount(transactions, amountFilter) {
  * Process transaction search query with comprehensive filtering and analysis.
  * This function contains the core logic moved from handleTransactionSearch in the controller.
  * 
- * @param {string} query - Natural language search query
+ * @param {string} query - Natural language search query or structured query
  * @param {number} limit - Maximum number of results to return
  * @param {string} cardToken - Optional card token for filtering
  * @param {string} requestId - Request ID for logging
@@ -525,12 +537,16 @@ export async function processTransactionSearchQuery(query, limit = 5, cardToken,
   let searchSummary = '';
   let appliedFilters = [];
   
-  // Get base transaction data
-  const baseTransactionLimit = Math.max(limit * 5, 50); // Get more data for filtering
-  let baseTransactions = await getRecentTransactionsForAgent(baseTransactionLimit);
+  // Parse structured query parameters (format: "key: value")
+  const structuredFilters = parseStructuredQuery(query);
+  logger.debug({ requestId, structuredFilters }, 'Parsed structured filters from query');
   
-  // Apply time-based filtering
-  if (queryType.includes('timeRange') || queryType.includes('time')) {
+  // Get base transaction data with enhanced filtering
+  const baseTransactionLimit = Math.max(limit * 10, 100); // Get more data for filtering
+  let baseTransactions = await getFilteredTransactions(baseTransactionLimit, cardToken, structuredFilters, requestId);
+  
+  // Apply time-based filtering if not already applied at database level
+  if ((queryType.includes('timeRange') || queryType.includes('time')) && !structuredFilters.startDate && !structuredFilters.endDate) {
     const timeFilter = extractTimeFilter(query);
     if (timeFilter) {
       baseTransactions = filterTransactionsByTime(baseTransactions, timeFilter);
@@ -539,8 +555,8 @@ export async function processTransactionSearchQuery(query, limit = 5, cardToken,
     }
   }
   
-  // Apply amount-based filtering
-  if (queryType.includes('amountRange') || queryType.includes('amount')) {
+  // Apply amount-based filtering if not already applied
+  if ((queryType.includes('amountRange') || queryType.includes('amount')) && !structuredFilters.amountRange) {
     const amountFilter = extractAmountFilter(query);
     if (amountFilter) {
       baseTransactions = filterTransactionsByAmount(baseTransactions, amountFilter);
@@ -549,25 +565,32 @@ export async function processTransactionSearchQuery(query, limit = 5, cardToken,
     }
   }
 
+  // Add applied structured filters to summary
+  if (structuredFilters.merchantName) {
+    appliedFilters.push(`merchant: ${structuredFilters.merchantName}`);
+  }
+  if (structuredFilters.status) {
+    appliedFilters.push(`status: ${structuredFilters.status}`);
+  }
+  if (structuredFilters.startDate) {
+    appliedFilters.push(`after: ${structuredFilters.startDate}`);
+  }
+  if (structuredFilters.endDate) {
+    appliedFilters.push(`before: ${structuredFilters.endDate}`);
+  }
+  if (structuredFilters.amountRange) {
+    appliedFilters.push(`amount: ${structuredFilters.amountRange.min}-${structuredFilters.amountRange.max}`);
+  }
+
   // Route based on primary query classification
   if (queryType.includes('recent')) {
     transactions = baseTransactions.slice(0, limit);
     searchSummary = `Recent ${limit} transactions`;
-  } else if (queryType.includes('merchant')) {
-    // Extract merchant name from query (basic implementation for now)
-    const merchantMatch = query.match(/(?:from|at|merchant)\s+([a-zA-Z0-9\s]+)/i);
-    const merchantName = merchantMatch ? merchantMatch[1].trim() : null;
-    
-    if (merchantName) {
-      transactions = baseTransactions.filter(t => 
-        t.merchant.toLowerCase().includes(merchantName.toLowerCase())
-      ).slice(0, limit);
-      searchSummary = `Transactions from ${merchantName}`;
-      appliedFilters.push(`merchant: ${merchantName}`);
-    } else {
-      transactions = baseTransactions.slice(0, limit);
-      searchSummary = `Recent transactions (merchant query unclear)`;
-    }
+  } else if (queryType.includes('merchant') || structuredFilters.merchantName) {
+    // For merchant queries, we've already filtered at database level
+    transactions = baseTransactions.slice(0, limit);
+    const merchantName = structuredFilters.merchantName || extractMerchantFromQuery(query);
+    searchSummary = merchantName ? `Transactions from ${merchantName}` : 'Merchant transactions';
   } else if (queryType.includes('statistics')) {
     // Basic statistics implementation - can be enhanced later
     const stats = {
@@ -628,4 +651,209 @@ export async function processTransactionSearchQuery(query, limit = 5, cardToken,
     verificationData,
     queryInsights
   };
+}
+
+/**
+ * Parse structured query format (e.g., "merchant: Starbucks amount: 10-50")
+ * @param {string} query - The query string to parse
+ * @returns {Object} Parsed filter object
+ */
+function parseStructuredQuery(query) {
+  const filters = {};
+  
+  // Extract merchant name (format: "merchant: NAME")
+  const merchantMatch = query.match(/merchant:\s*([^,\s]+(?:\s+[^,\s]+)*?)(?:\s+\w+:|$)/i);
+  if (merchantMatch) {
+    filters.merchantName = merchantMatch[1].trim();
+  }
+  
+  // Extract status (format: "status: APPROVED")
+  const statusMatch = query.match(/status:\s*([A-Z_]+)/i);
+  if (statusMatch) {
+    filters.status = statusMatch[1].toUpperCase();
+  }
+  
+  // Extract date range (format: "after: DATE" and "before: DATE")
+  const afterMatch = query.match(/after:\s*([^\s]+)/i);
+  if (afterMatch) {
+    filters.startDate = afterMatch[1];
+  }
+  
+  const beforeMatch = query.match(/before:\s*([^\s]+)/i);
+  if (beforeMatch) {
+    filters.endDate = beforeMatch[1];
+  }
+  
+  // Extract amount range (format: "amount: 10-50")
+  const amountMatch = query.match(/amount:\s*(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)/i);
+  if (amountMatch) {
+    filters.amountRange = {
+      min: parseFloat(amountMatch[1]),
+      max: parseFloat(amountMatch[2])
+    };
+  }
+  
+  return filters;
+}
+
+/**
+ * Extract merchant name from natural language query
+ * @param {string} query - The query string  
+ * @returns {string|null} Merchant name or null
+ */
+function extractMerchantFromQuery(query) {
+  // Handle both structured and natural language formats
+  const patterns = [
+    /merchant:\s*([^,\s]+(?:\s+[^,\s]+)*?)(?:\s+\w+:|$)/i,
+    /(?:from|at)\s+([a-zA-Z0-9\s]+)/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Get filtered transactions with database-level filtering where possible
+ * @param {number} limit - Maximum number of transactions to fetch
+ * @param {string} cardToken - Optional card token filter
+ * @param {Object} filters - Structured filter object
+ * @param {string} requestId - Request ID for logging
+ * @returns {Promise<Array>} Filtered transactions
+ */
+async function getFilteredTransactions(limit, cardToken, filters, requestId) {
+  try {
+    logger.debug({ requestId, filters, cardToken }, 'Applying database-level filters');
+    
+    // Build query with filters
+    let query = supabase_client
+      .from("transaction_details")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    
+    // Add card token filter if provided
+    if (cardToken && typeof cardToken === 'string') {
+      query = query.eq("card_token", cardToken);
+      logger.debug(`Applied card token filter: ${cardToken.substring(0, 8)}...`);
+    }
+    
+    // Add merchant filter (case-insensitive partial match)
+    if (filters.merchantName) {
+      query = query.ilike("merchant_name", `%${filters.merchantName}%`);
+      logger.debug(`Applied merchant filter: ${filters.merchantName}`);
+    }
+    
+    // Add status filter
+    if (filters.status) {
+      query = query.eq("result", filters.status);
+      logger.debug(`Applied status filter: ${filters.status}`);
+    }
+    
+    // Add date filters
+    if (filters.startDate) {
+      query = query.gte("created_at", filters.startDate);
+      logger.debug(`Applied start date filter: ${filters.startDate}`);
+    }
+    
+    if (filters.endDate) {
+      query = query.lte("created_at", filters.endDate);
+      logger.debug(`Applied end date filter: ${filters.endDate}`);
+    }
+    
+    const { data, error } = await query;
+
+    if (error) {
+      logger.error("Error fetching filtered transactions:", error);
+      throw error;
+    }
+
+    if (!data) return [];
+
+    // Apply client-side amount filtering if specified
+    let filteredData = data;
+    if (filters.amountRange) {
+      filteredData = data.filter(transaction => {
+        const amount = transaction.cardholder_amount_usd || 0;
+        return amount >= filters.amountRange.min && amount <= filters.amountRange.max;
+      });
+      logger.debug(`Applied amount range filter: ${filters.amountRange.min}-${filters.amountRange.max}, ${filteredData.length}/${data.length} transactions matched`);
+    }
+
+    // Enhanced transaction mapping with proper categorization (same as getRecentTransactionsForAgent)
+    const enhancedTransactions = await Promise.all(
+      filteredData.map(async (t) => {
+        let category = "Unknown Category";
+        let description = "Unknown Description";
+        
+        // Use existing category/description or lookup MCC
+        if (t.mcc_category) {
+          category = t.mcc_category;
+        }
+        if (t.mcc_description) {
+          description = t.mcc_description;
+        }
+        
+        // Only do MCC lookup if category or description is missing
+        if ((!t.mcc_category || !t.mcc_description) && t.merchant_mcc_code) {
+          try {
+            const mccData = await lookupMCC(t.merchant_mcc_code);
+            if (mccData) {
+              if (!t.mcc_category && mccData.category) {
+                category = mccData.category;
+              }
+              if (!t.mcc_description && mccData.description) {
+                description = mccData.description;
+              }
+            }
+          } catch (error) {
+            logger.warn(`Failed to lookup MCC ${t.merchant_mcc_code}:`, error.message);
+          }
+        }
+        
+        // Fallbacks
+        if (category === "Unknown Category" && description !== "Unknown Description") {
+          category = description;
+        } else if (description === "Unknown Description" && category !== "Unknown Category") {
+          description = category;
+        }
+
+        return {
+          token: t.token,
+          timestamp: new Date(t.created_at).toLocaleString(),
+          merchant: t.merchant_name || "Unknown Merchant",
+          location:
+            [t.merchant_city, t.merchant_state, t.merchant_country]
+              .filter(Boolean)
+              .join(", ") || "Unknown Location",
+          amount: `${t.cardholder_currency} ${t.cardholder_amount_usd?.toFixed(2)}`,
+          merchant_amount:
+            t.merchant_amount_usd !== t.cardholder_amount_usd
+              ? `${t.merchant_currency} ${t.merchant_amount_usd?.toFixed(2)}`
+              : null,
+          status: t.result,
+          is_approved: t.result === "APPROVED",
+          network: t.network_type?.toUpperCase() || "Unknown Network",
+          authorization_code: t.authorization_code,
+          reference_number: t.retrieval_reference_number,
+          description: description,
+          category: category,
+          merchant_mcc: t.merchant_mcc_code,
+        };
+      })
+    );
+
+    logger.debug(`Successfully processed ${enhancedTransactions.length} filtered transactions`);
+    return enhancedTransactions;
+    
+  } catch (error) {
+    logger.error("Error in getFilteredTransactions:", error);
+    // Fallback to getRecentTransactionsForAgent
+    return await getRecentTransactionsForAgent(limit, cardToken);
+  }
 }

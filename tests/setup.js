@@ -78,7 +78,7 @@ global.testUtils = {
     if (sanitized.cvv) {
       sanitized.cvv = '***';
     }
-    if (sanitized.cardToken && sanitized.cardToken.length > 8) {
+    if (sanitized.cardToken && typeof sanitized.cardToken === 'string' && sanitized.cardToken.length > 8) {
       sanitized.cardToken = sanitized.cardToken.substring(0, 8) + '***';
     }
     

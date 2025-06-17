@@ -79,25 +79,47 @@ export async function handleGetCardDetails(args, requestId) {
       panRequested: args?.includePan || false 
     }, 'MCP tool: get_card_details called');
     
-    // Validate required parameters
-    if (!args?.cardToken) {
+    // Enhanced parameter extraction to handle both flat and nested structures
+    let cardToken, includePan, reason;
+    
+    if (args?.cardToken) {
+      // Handle nested structure: { cardToken: { cardToken: "uuid", includePan: true, reason: "uuid" } }
+      if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
+        cardToken = args.cardToken.cardToken;
+        includePan = args.cardToken.includePan || args.includePan || false;
+        reason = args.cardToken.reason || args.reason;
+      } 
+      // Handle flat structure: { cardToken: "uuid", includePan: true, reason: "uuid" }
+      else if (typeof args.cardToken === 'string') {
+        cardToken = args.cardToken;
+        includePan = args.includePan || false;
+        reason = args.reason;
+      } else {
+        throw new Error('cardToken must be a string or object with cardToken property');
+      }
+    } else {
       throw new Error('cardToken is required');
     }
     
+    // Validate that we have a valid string cardToken
+    if (!cardToken || typeof cardToken !== 'string') {
+      throw new Error('Card token is required and must be a string');
+    }
+    
     // Security: Log PAN access attempts
-    if (args.includePan) {
+    if (includePan) {
       logger.warn({ 
         requestId, 
-        cardToken: maskCardToken(args.cardToken),
-        reason: args.reason || 'not_specified'
+        cardToken: maskCardToken(cardToken),
+        reason: reason || 'not_specified'
       }, 'SECURITY: PAN access requested');
     }
     
     // Call existing service function - ZERO business logic changes
     const result = await cardService.getCardDetailsForMcp({
-      cardToken: args.cardToken,
-      includePan: args.includePan || false,
-      reason: args.reason
+      cardToken: cardToken,
+      includePan: includePan,
+      reason: reason
     }, requestId);
     
     // Format for MCP response (PAN already handled by service)
@@ -116,7 +138,7 @@ export async function handleGetCardDetails(args, requestId) {
     
     logger.info({ 
       requestId, 
-      cardToken: maskCardToken(args.cardToken),
+      cardToken: maskCardToken(cardToken),
       panIncluded: !!result.pan,
       responseTime: Date.now() - extractTimestamp(requestId)
     }, 'MCP tool: get_card_details completed successfully');
@@ -126,7 +148,7 @@ export async function handleGetCardDetails(args, requestId) {
   } catch (error) {
     logger.error({ 
       requestId, 
-      cardToken: args?.cardToken ? maskCardToken(args.cardToken) : 'not_provided',
+      cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskCardToken(args.cardToken) : 'nested_object') : 'not_provided',
       error: error.message 
     }, 'MCP tool error: get_card_details');
     

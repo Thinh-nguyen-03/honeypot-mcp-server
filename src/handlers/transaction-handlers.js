@@ -80,6 +80,27 @@ export async function handleSearchTransactions(args, requestId) {
       args: sanitizeArgs(args) 
     }, 'MCP tool: search_transactions called');
     
+    // Enhanced parameter extraction to handle both flat and nested structures
+    let cardToken;
+    
+    if (args?.cardToken) {
+      // Handle nested structure
+      if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
+        cardToken = args.cardToken.cardToken;
+      } 
+      // Handle flat structure
+      else if (typeof args.cardToken === 'string') {
+        cardToken = args.cardToken;
+      } else {
+        throw new Error('cardToken must be a string or object with cardToken property');
+      }
+    }
+    
+    // Validate cardToken if provided
+    if (cardToken && typeof cardToken !== 'string') {
+      throw new Error('cardToken must be a string');
+    }
+    
     // Build search query from parameters
     let searchQuery = '';
     const queryParts = [];
@@ -96,7 +117,7 @@ export async function handleSearchTransactions(args, requestId) {
     const result = await reportingService.processTransactionSearchQuery(
       searchQuery,
       Math.min(args?.limit || 50, 200),
-      args?.cardToken,
+      cardToken,
       requestId
     );
     
@@ -111,7 +132,8 @@ export async function handleSearchTransactions(args, requestId) {
               totalCount: result.totalCount || result.length || 0,
               searchQuery: searchQuery,
               searchParams: {
-                ...sanitizeArgs(args)
+                ...sanitizeArgs(args),
+                cardToken: cardToken ? maskToken(cardToken) : undefined
               }
             },
             metadata: {
@@ -126,7 +148,7 @@ export async function handleSearchTransactions(args, requestId) {
     logger.info({ 
       requestId, 
       resultCount: result.totalCount || result.length || 0,
-      cardToken: args?.cardToken ? maskToken(args.cardToken) : 'not_specified',
+      cardToken: cardToken ? maskToken(cardToken) : 'all_cards',
       responseTime: Date.now() - extractTimestamp(requestId)
     }, 'MCP tool: search_transactions completed successfully');
     
@@ -135,6 +157,7 @@ export async function handleSearchTransactions(args, requestId) {
   } catch (error) {
     logger.error({ 
       requestId, 
+      cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskToken(args.cardToken) : 'nested_object') : 'not_provided',
       error: error.message, 
       stack: error.stack 
     }, 'MCP tool error: search_transactions');
@@ -155,22 +178,30 @@ export async function handleGetRecentTransactions(args, requestId) {
       args: sanitizeArgs(args) 
     }, 'MCP tool: get_recent_transactions called');
     
-    // Validate required parameters
-    if (!args?.cardToken) {
-      throw new Error('cardToken is required');
+    // Enhanced parameter extraction to handle both flat and nested structures
+    let cardToken;
+    
+    if (args?.cardToken) {
+      // Handle nested structure
+      if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
+        cardToken = args.cardToken.cardToken;
+      } 
+      // Handle flat structure
+      else if (typeof args.cardToken === 'string') {
+        cardToken = args.cardToken;
+      } else {
+        throw new Error('cardToken must be a string or object with cardToken property');
+      }
     }
     
-    // Use available method from reporting service
+    // Validate cardToken if provided
+    if (cardToken && typeof cardToken !== 'string') {
+      throw new Error('cardToken must be a string');
+    }
+    
+    // Use available method from reporting service with proper card filtering
     const limit = Math.min(args?.limit || 20, 100);
-    const result = await reportingService.getRecentTransactionsForAgent(limit);
-    
-    // Filter by card token if provided (since service doesn't filter by card)
-    let transactions = result;
-    if (args.cardToken && args.cardToken !== 'all') {
-      // Note: This is a simplified filter since we don't have card-specific querying
-      // In production, you'd want to enhance the service to support card filtering
-      transactions = result; // For now, return all recent transactions
-    }
+    const result = await reportingService.getRecentTransactionsForAgent(limit, cardToken);
     
     // Format for MCP response
     const response = {
@@ -179,11 +210,11 @@ export async function handleGetRecentTransactions(args, requestId) {
           type: "text",
           text: JSON.stringify({
             recentTransactions: {
-              cardToken: maskToken(args.cardToken),
-              transactions: transactions,
-              count: transactions?.length || 0,
+              cardToken: cardToken ? maskToken(cardToken) : 'all_cards',
+              transactions: result,
+              count: result?.length || 0,
               includeFraudAnalysis: args?.includeFraudAnalysis !== false,
-              note: 'Filtered from recent transactions across all cards'
+              note: cardToken ? `Filtered for specific card: ${maskToken(cardToken)}` : 'Transactions from all cards'
             },
             metadata: {
               timestamp: new Date().toISOString(),
@@ -196,8 +227,8 @@ export async function handleGetRecentTransactions(args, requestId) {
     
     logger.info({ 
       requestId, 
-      cardToken: maskToken(args.cardToken),
-      transactionCount: transactions?.length || 0,
+      cardToken: cardToken ? maskToken(cardToken) : 'all_cards',
+      transactionCount: result?.length || 0,
       responseTime: Date.now() - extractTimestamp(requestId)
     }, 'MCP tool: get_recent_transactions completed successfully');
     
@@ -206,8 +237,9 @@ export async function handleGetRecentTransactions(args, requestId) {
   } catch (error) {
     logger.error({ 
       requestId, 
-      cardToken: args?.cardToken ? maskToken(args.cardToken) : 'not_provided',
-      error: error.message 
+      cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskToken(args.cardToken) : 'nested_object') : 'not_provided',
+      error: error.message, 
+      stack: error.stack 
     }, 'MCP tool error: get_recent_transactions');
     
     throw formatMcpError(error, 'get_recent_transactions', requestId);
@@ -231,6 +263,27 @@ export async function handleGetTransactionsByMerchant(args, requestId) {
       throw new Error('merchantDescriptor is required');
     }
     
+    // Enhanced parameter extraction to handle both flat and nested structures
+    let cardToken;
+    
+    if (args?.cardToken) {
+      // Handle nested structure
+      if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
+        cardToken = args.cardToken.cardToken;
+      } 
+      // Handle flat structure
+      else if (typeof args.cardToken === 'string') {
+        cardToken = args.cardToken;
+      } else {
+        throw new Error('cardToken must be a string or object with cardToken property');
+      }
+    }
+    
+    // Validate cardToken if provided
+    if (cardToken && typeof cardToken !== 'string') {
+      throw new Error('cardToken must be a string');
+    }
+    
     // Prepare parameters for search query
     const searchQuery = `merchant: ${args.merchantDescriptor}`;
     const limit = Math.min(args?.limit || 50, 200);
@@ -239,7 +292,7 @@ export async function handleGetTransactionsByMerchant(args, requestId) {
     const result = await reportingService.processTransactionSearchQuery(
       searchQuery, 
       limit, 
-      args.cardToken, 
+      cardToken, 
       requestId
     );
     
@@ -251,6 +304,7 @@ export async function handleGetTransactionsByMerchant(args, requestId) {
           text: JSON.stringify({
             merchantTransactions: {
               merchantDescriptor: args.merchantDescriptor,
+              cardToken: cardToken ? maskToken(cardToken) : 'all_cards',
               timeframe: args?.timeframe || '30d',
               transactions: result.transactions || result,
               totalCount: result.totalCount || result.length || 0
@@ -267,6 +321,7 @@ export async function handleGetTransactionsByMerchant(args, requestId) {
     logger.info({ 
       requestId, 
       merchantDescriptor: args.merchantDescriptor,
+      cardToken: cardToken ? maskToken(cardToken) : 'all_cards',
       transactionCount: result.totalCount || result.length || 0,
       responseTime: Date.now() - extractTimestamp(requestId)
     }, 'MCP tool: get_transactions_by_merchant completed successfully');
@@ -277,6 +332,7 @@ export async function handleGetTransactionsByMerchant(args, requestId) {
     logger.error({ 
       requestId, 
       merchantDescriptor: args?.merchantDescriptor || 'not_provided',
+      cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskToken(args.cardToken) : 'nested_object') : 'not_provided',
       error: error.message 
     }, 'MCP tool error: get_transactions_by_merchant');
     
@@ -287,7 +343,7 @@ export async function handleGetTransactionsByMerchant(args, requestId) {
 /**
  * Get Transaction Details Tool Handler
  * Implements: get_transaction_details MCP tool
- * Uses: supabaseService.getTransaction() - existing business logic
+ * Uses: supabaseService.getTransactionDetails() - existing business logic
  */
 export async function handleGetTransactionDetails(args, requestId) {
   try {
@@ -302,10 +358,8 @@ export async function handleGetTransactionDetails(args, requestId) {
     }
     
     // Get basic transaction data using existing method
-    const transactionResult = await supabaseService.getTransaction(
-      args.transactionToken,
-      { includeMetadata: true },
-      requestId
+    const transactionResult = await supabaseService.getTransactionDetails(
+      args.transactionToken
     );
     
     if (!transactionResult) {

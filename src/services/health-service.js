@@ -244,7 +244,7 @@ class HealthService {
         }], { onConflict: 'check_id' });
 
       // Note: health_checks table might not exist, so we'll catch this error
-      if (writeTest && !writeTest.message.includes('does not exist')) {
+      if (writeTest && writeTest.message && !writeTest.message.includes('does not exist')) {
         logger.warn({ checkId, error: writeTest.message }, 'Database write test warning');
       }
 
@@ -499,7 +499,7 @@ class HealthService {
       // Test environment variables
       const envCheck = {
         hasSupabaseUrl: !!process.env.SUPABASE_URL,
-        hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
+        hasSupabaseKey: !!process.env.SUPABASE_SERVICE_KEY,
         hasLithicKey: !!process.env.LITHIC_API_KEY,
         nodeEnv: process.env.NODE_ENV || 'unknown'
       };

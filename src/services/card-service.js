@@ -30,7 +30,7 @@ async function executeCardOperation(operation, operationName, context = {}) {
     operation: operationName,
     context: {
       ...context,
-      cardToken: context.cardToken ? `${context.cardToken.substring(0, 8)}...` : null
+      cardToken: (context.cardToken && typeof context.cardToken === 'string') ? `${context.cardToken.substring(0, 8)}...` : null
     },
     timestamp: new Date().toISOString()
   }, `Card operation attempted: ${operationName}`);
@@ -501,7 +501,7 @@ export async function getCardDetailsForMcp(cardToken, requestId, options = {}) {
   // Log security-sensitive card access
   logger.info({
     requestId,
-    cardToken: cardToken ? `${cardToken.substring(0, 8)}...` : null,
+    cardToken: (cardToken && typeof cardToken === 'string') ? `${cardToken.substring(0, 8)}...` : null,
     operation: 'get_card_details_mcp',
     sensitivity: 'HIGH'
   }, 'Sensitive card data access requested by AI agent via MCP service');
@@ -612,7 +612,7 @@ export async function getCardDetailsForMcp(cardToken, requestId, options = {}) {
     // Log successful card access for security monitoring
     logger.info({
       requestId,
-      cardToken: `${cardToken.substring(0, 8)}...`,
+      cardToken: (cardToken && typeof cardToken === 'string') ? `${cardToken.substring(0, 8)}...` : cardToken,
       cardState: cardDetails.state,
       accessGranted: true,
       sensitivity: 'HIGH'

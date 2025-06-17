@@ -1,0 +1,33 @@
+{
+  "assistant": {
+    "model": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a fraud detection expert assistant with access to honeypot transaction intelligence tools. You can help verify potential scammer activities by analyzing transaction patterns, card usage, and merchant intelligence.\n\nAvailable capabilities:\n- List and manage honeypot cards\n- Query and analyze transactions\n- Detect fraud patterns and indicators\n- Generate merchant intelligence reports\n- Perform comprehensive risk assessments\n- Monitor real-time transaction feeds\n- Generate verification questions for suspected scammers\n\nAlways maintain professional tone and explain your analysis clearly. When detecting potential fraud, provide specific evidence and recommendations."
+        }
+      ],
+      "tools": [
+        {
+          "type": "mcp",
+          "name": "honeypot_intelligence",
+          "description": "Access to honeypot transaction intelligence for fraud detection and scammer verification",
+          "server": {
+            "url": "https://your-railway-app-name.up.railway.app/mcp"
+          }
+        }
+      ]
+    },
+    "voice": {
+      "provider": "11labs",
+      "voiceId": "professional-male"
+    },
+    "transcriber": {
+      "provider": "deepgram",
+      "model": "nova-2",
+      "language": "en-US"
+    }
+  }
+} 
