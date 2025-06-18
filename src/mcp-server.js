@@ -369,17 +369,20 @@ async function main() {
           res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
           res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id, Accept');
           
-          // Check if this is a Vapi request (node user agent)
-          const isVapiRequest = req.headers['user-agent']?.includes('node');
-          if (isVapiRequest) {
-            logger.info('Detected Vapi POST request, applying special handling');
-            // Ensure we can handle any accept type for Vapi
-            if (req.headers.accept && !req.headers.accept.includes('application/json')) {
-              logger.info('Vapi sent non-JSON accept header, overriding', { 
-                originalAccept: req.headers.accept 
-              });
-              req.headers.accept = 'application/json, */*';
-            }
+          // Check if this is a Vapi request or browser request that needs accept header fix
+          const userAgent = req.headers['user-agent'] || '';
+          const needsAcceptFix = userAgent.includes('node') || userAgent.includes('Mozilla') || 
+                               !req.headers.accept?.includes('text/event-stream');
+          
+          if (needsAcceptFix) {
+            logger.info('Detected client needing accept header fix', { 
+              userAgent: userAgent.substring(0, 50),
+              originalAccept: req.headers.accept 
+            });
+            // Fix accept header to include what the transport expects
+            const originalAccept = req.headers.accept || '*/*';
+            req.headers.accept = `application/json, text/event-stream, ${originalAccept}`;
+            logger.info('Modified accept header', { newAccept: req.headers.accept });
           }
           
           // Optional: Handle authorization header if present (but don't require it)
@@ -485,11 +488,17 @@ async function main() {
         try {
           logger.info('Received GET request to /mcp for StreamableHTTP SSE notifications');
           
-          // Check if this is a request expecting traditional SSE (like Vapi)
+          // Check if this is a request expecting traditional SSE (like Vapi) or browser access
           const userAgent = req.headers['user-agent'] || '';
           const acceptHeader = req.headers['accept'] || '';
           
-          if (userAgent.includes('node') || acceptHeader.includes('text/event-stream')) {
+          // Detect SSE clients: Vapi (node), browsers, or explicit text/event-stream requests
+          const isSSEClient = userAgent.includes('node') || 
+                             acceptHeader.includes('text/event-stream') ||
+                             acceptHeader.includes('text/html') || 
+                             !req.headers['mcp-session-id']; // No session ID likely means initial SSE connection
+          
+          if (isSSEClient) {
             logger.info('Detected traditional SSE client (likely Vapi), providing classic SSE response');
             
             // Generate session ID for this SSE connection
