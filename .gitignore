@@ -129,6 +129,26 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
 # Project-specific exclusions
 .cursor/
 supabase-mcp/
