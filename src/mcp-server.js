@@ -390,6 +390,9 @@ async function main() {
             logger.info('Modified accept header', { newAccept: req.headers.accept });
           }
           
+          // Check if this is an SSE client (like Vapi) that needs special handling
+          const isSSEClient = userAgent.includes('node') || userAgent.includes('Vapi');
+          
           // Optional: Handle authorization header if present (but don't require it)
           const authHeader = req.headers.authorization;
           if (authHeader) {
@@ -400,7 +403,93 @@ async function main() {
             // Note: We log but don't validate the token since server doesn't require auth
           }
           
-          // Check for existing session ID
+          // For SSE clients, we need to handle responses differently
+          if (isSSEClient) {
+            logger.info('Detected SSE client, using SSE response handling');
+            
+            // Find matching SSE connection by looking for active connections
+            let sseSessionId = null;
+            let sseConnection = null;
+            
+            // Look for the most recent SSE connection (Vapi typically has one active connection)
+            for (const [sessionId, connection] of sseConnections.entries()) {
+              if (Date.now() - connection.lastActivity < 120000) { // Within 2 minutes
+                sseSessionId = sessionId;
+                sseConnection = connection;
+                break;
+              }
+            }
+            
+            if (sseConnection) {
+              logger.info('Found matching SSE connection for POST response', {
+                sessionId: sseSessionId.substring(0, 8) + '...'
+              });
+              
+              // Create a mock response object that captures the response for SSE
+              const mockRes = {
+                headersSent: false,
+                statusCode: 200,
+                _headers: {},
+                setHeader: function(name, value) {
+                  this._headers[name] = value;
+                },
+                writeHead: function(statusCode, headers) {
+                  this.statusCode = statusCode;
+                  if (headers) {
+                    Object.assign(this._headers, headers);
+                  }
+                },
+                write: function(data) {
+                  // Send the MCP response through SSE
+                  try {
+                    const responseData = typeof data === 'string' ? data : JSON.stringify(data);
+                    sseConnection.res.write(`event: message\n`);
+                    sseConnection.res.write(`data: ${responseData}\n\n`);
+                    if (sseConnection.res.flush) sseConnection.res.flush();
+                    logger.info('Sent MCP response through SSE', {
+                      sessionId: sseSessionId.substring(0, 8) + '...',
+                      responseSize: responseData.length
+                    });
+                  } catch (error) {
+                    logger.error('Error sending SSE response:', error);
+                  }
+                },
+                end: function(data) {
+                  if (data) {
+                    this.write(data);
+                  }
+                  this.headersSent = true;
+                }
+              };
+              
+              // Create transport and handle request using mock response
+              const sessionId = randomUUID();
+              const transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: () => sessionId
+              });
+
+              const server = createMcpServer();
+              await server.connect(transport);
+              
+              logger.info('About to call transport.handleRequest with SSE response handler');
+              await transport.handleRequest(req, mockRes, req.body);
+              
+              // Send success response to the POST request
+              res.status(200).json({ success: true });
+              
+              logger.info('SSE transport.handleRequest completed successfully', {
+                method: req.body?.method,
+                requestId: req.body?.id
+              });
+              
+              return;
+            } else {
+              logger.warn('No active SSE connection found for SSE client POST request');
+              // Fall through to normal handling
+            }
+          }
+          
+          // Normal StreamableHTTP handling for non-SSE clients
           const sessionId = req.headers['mcp-session-id'];
           let transport;
 
@@ -529,6 +618,9 @@ async function main() {
               'mcp-session-id': sessionId
             });
             
+            // Store SSE connection for later use in POST responses
+            sseConnections.set(sessionId, { res, lastActivity: Date.now() });
+            
             // Send SSE endpoint event with fully qualified URL (required by Vapi/Copilot Studio)
             const host = req.get('host');
             const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
@@ -549,11 +641,13 @@ async function main() {
             const keepAlive = setInterval(() => {
               res.write(`event: ping\n`);
               res.write(`data: ${Date.now()}\n\n`);
+              sseConnections.get(sessionId).lastActivity = Date.now();
             }, 30000);
             
             req.on('close', () => {
               logger.info(`SSE connection closed for session: ${sessionId.substring(0, 8)}...`);
               clearInterval(keepAlive);
+              sseConnections.delete(sessionId);
             });
             
             // Log successful SSE setup
