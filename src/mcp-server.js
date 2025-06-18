@@ -300,6 +300,21 @@ async function main() {
       
       app.use(express.json());
       
+      // Additional logging for all requests (moved before routes)
+      app.use((req, res, next) => {
+        logger.info({ 
+          method: req.method, 
+          path: req.path, 
+          query: req.query,
+          headers: {
+            'user-agent': req.headers['user-agent'],
+            'accept': req.headers['accept'],
+            'mcp-session-id': req.headers['mcp-session-id']
+          }
+        }, 'Incoming request');
+        next();
+      });
+      
       // Environment variable validation
       const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'LITHIC_API_KEY'];
       const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -327,10 +342,45 @@ async function main() {
       // Store transports by session ID for StreamableHTTP
       const transports = {};
       
+      // Handle OPTIONS requests for CORS preflight
+      app.options('/mcp', (req, res) => {
+        logger.info('Received OPTIONS request for CORS preflight');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id, Accept');
+        res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+        res.status(200).end();
+      });
+      
       // Handle POST requests for client-to-server communication (StreamableHTTP)
       app.post('/mcp', async (req, res) => {
         try {
-          logger.info('Received POST request to /mcp for StreamableHTTP');
+          logger.info('Received POST request to /mcp for StreamableHTTP', {
+            contentType: req.headers['content-type'],
+            accept: req.headers['accept'],
+            userAgent: req.headers['user-agent'],
+            bodyKeys: req.body ? Object.keys(req.body) : 'no body',
+            method: req.body?.method
+          });
+          
+          // Set appropriate response headers for MCP
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id, Accept');
+          
+          // Check if this is a Vapi request (node user agent)
+          const isVapiRequest = req.headers['user-agent']?.includes('node');
+          if (isVapiRequest) {
+            logger.info('Detected Vapi POST request, applying special handling');
+            // Ensure we can handle any accept type for Vapi
+            if (req.headers.accept && !req.headers.accept.includes('application/json')) {
+              logger.info('Vapi sent non-JSON accept header, overriding', { 
+                originalAccept: req.headers.accept 
+              });
+              req.headers.accept = 'application/json, */*';
+            }
+          }
           
           // Optional: Handle authorization header if present (but don't require it)
           const authHeader = req.headers.authorization;
@@ -398,7 +448,15 @@ async function main() {
           }
 
           // Handle the request with proper error handling
+          logger.info('About to call transport.handleRequest', {
+            sessionId: transport.sessionId || 'unknown',
+            bodyMethod: req.body?.method,
+            hasTransport: !!transport
+          });
+          
           await transport.handleRequest(req, res, req.body);
+          
+          logger.info('transport.handleRequest completed successfully');
           
         } catch (error) {
           logger.error('Error handling StreamableHTTP POST request:', {
@@ -427,7 +485,54 @@ async function main() {
         try {
           logger.info('Received GET request to /mcp for StreamableHTTP SSE notifications');
           
-          // Make session ID optional for Streamable HTTP compatibility
+          // Check if this is a request expecting traditional SSE (like Vapi)
+          const userAgent = req.headers['user-agent'] || '';
+          const acceptHeader = req.headers['accept'] || '';
+          
+          if (userAgent.includes('node') || acceptHeader.includes('text/event-stream')) {
+            logger.info('Detected traditional SSE client (likely Vapi), providing classic SSE response');
+            
+            // Generate session ID for this SSE connection
+            const sessionId = randomUUID();
+            
+            // Set SSE headers
+            res.writeHead(200, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Cache-Control',
+              'mcp-session-id': sessionId
+            });
+            
+            // Send SSE endpoint event with fully qualified URL (required by Vapi/Copilot Studio)
+            const host = req.get('host');
+            const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+            const fullEndpointUrl = `${protocol}://${host}/mcp`;
+            
+            logger.info('Sending SSE endpoint event', { 
+              sessionId: sessionId.substring(0, 8) + '...',
+              endpointUrl: fullEndpointUrl 
+            });
+            
+            res.write(`event: endpoint\n`);
+            res.write(`data: ${fullEndpointUrl}\n\n`);
+            
+            // Keep connection alive and handle cleanup
+            const keepAlive = setInterval(() => {
+              res.write(`event: ping\n`);
+              res.write(`data: ${Date.now()}\n\n`);
+            }, 30000);
+            
+            req.on('close', () => {
+              logger.info(`SSE connection closed for session: ${sessionId.substring(0, 8)}...`);
+              clearInterval(keepAlive);
+            });
+            
+            return;
+          }
+          
+          // Original Streamable HTTP handling for other clients
           let sessionId = req.headers['mcp-session-id'] || req.query.sessionId;
           
           // If no session ID provided, generate one for Streamable HTTP compatibility
@@ -504,14 +609,6 @@ async function main() {
         }
       });
 
-
-      
-      // Additional logging for all requests
-      app.use('*', (req, res, next) => {
-        logger.info({ method: req.method, path: req.path, headers: req.headers }, 'Incoming request');
-        next();
-      });
-      
 
       
       const port = process.env.PORT || 3000;
