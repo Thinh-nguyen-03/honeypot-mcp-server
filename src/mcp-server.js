@@ -342,6 +342,9 @@ async function main() {
       // Store transports by session ID for StreamableHTTP
       const transports = {};
       
+      // Track SSE connections for debugging
+      const sseConnections = new Map();
+      
       // Handle OPTIONS requests for CORS preflight
       app.options('/mcp', (req, res) => {
         logger.info('Received OPTIONS request for CORS preflight');
@@ -360,7 +363,9 @@ async function main() {
             accept: req.headers['accept'],
             userAgent: req.headers['user-agent'],
             bodyKeys: req.body ? Object.keys(req.body) : 'no body',
-            method: req.body?.method
+            method: req.body?.method,
+            requestId: req.body?.id,
+            hasParams: !!req.body?.params
           });
           
           // Set appropriate response headers for MCP
@@ -454,12 +459,17 @@ async function main() {
           logger.info('About to call transport.handleRequest', {
             sessionId: transport.sessionId || 'unknown',
             bodyMethod: req.body?.method,
-            hasTransport: !!transport
+            hasTransport: !!transport,
+            requestId: req.body?.id
           });
           
           await transport.handleRequest(req, res, req.body);
           
-          logger.info('transport.handleRequest completed successfully');
+          logger.info('transport.handleRequest completed successfully', {
+            method: req.body?.method,
+            requestId: req.body?.id,
+            responseHeadersSent: res.headersSent
+          });
           
         } catch (error) {
           logger.error('Error handling StreamableHTTP POST request:', {
@@ -499,7 +509,12 @@ async function main() {
                              !req.headers['mcp-session-id']; // No session ID likely means initial SSE connection
           
           if (isSSEClient) {
-            logger.info('Detected traditional SSE client (likely Vapi), providing classic SSE response');
+            logger.info('Detected traditional SSE client (likely Vapi), providing classic SSE response', {
+              userAgent: userAgent.substring(0, 50),
+              acceptHeader: acceptHeader.substring(0, 100),
+              hasSessionId: !!req.headers['mcp-session-id'],
+              remoteAddress: req.ip || req.connection.remoteAddress
+            });
             
             // Generate session ID for this SSE connection
             const sessionId = randomUUID();
@@ -527,6 +542,9 @@ async function main() {
             res.write(`event: endpoint\n`);
             res.write(`data: ${fullEndpointUrl}\n\n`);
             
+            // Immediately flush the response to ensure Vapi receives it
+            if (res.flush) res.flush();
+            
             // Keep connection alive and handle cleanup
             const keepAlive = setInterval(() => {
               res.write(`event: ping\n`);
@@ -536,6 +554,12 @@ async function main() {
             req.on('close', () => {
               logger.info(`SSE connection closed for session: ${sessionId.substring(0, 8)}...`);
               clearInterval(keepAlive);
+            });
+            
+            // Log successful SSE setup
+            logger.info('SSE connection established successfully', {
+              sessionId: sessionId.substring(0, 8) + '...',
+              clientIP: req.ip || req.connection.remoteAddress
             });
             
             return;
