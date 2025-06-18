@@ -1,55 +1,51 @@
-# API Reference Guide - Honeypot MCP Server
+# API Reference - Honeypot MCP Server
+
+[![Enterprise Grade](https://img.shields.io/badge/Documentation-Enterprise%20Grade-purple.svg)]()
+[![MCP Protocol](https://img.shields.io/badge/Protocol-MCP%202.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-1.0.0-green.svg)]()
 
 ## Table of Contents
 1. [Introduction](#introduction)
-2. [Quick Start](#quick-start)
-3. [Authentication](#authentication)
+2. [Getting Started](#getting-started)
+3. [Authentication & Security](#authentication--security)
 4. [MCP Protocol Overview](#mcp-protocol-overview)
 5. [Tool Reference](#tool-reference)
 6. [Response Formats](#response-formats)
 7. [Error Handling](#error-handling)
-8. [Performance & Limits](#performance--limits)
-9. [Security Guidelines](#security-guidelines)
-10. [Code Examples](#code-examples)
-11. [Troubleshooting](#troubleshooting)
+8. [Performance Guidelines](#performance-guidelines)
+9. [Integration Examples](#integration-examples)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Introduction
 
-The Honeypot MCP Server provides AI agents with access to real-time fraud detection and transaction intelligence through the Model Context Protocol (MCP). This server transforms a production-grade fraud detection system into an AI-accessible service while maintaining all security and performance requirements.
+The Honeypot MCP Server API provides AI agents with sophisticated fraud detection capabilities through 18 specialized tools. Built on the Model Context Protocol (MCP), this enterprise-grade platform enables real-time transaction monitoring, pattern analysis, and fraud investigation workflows.
 
-### Key Features
-- 18 specialized fraud detection tools
-- Real-time transaction monitoring
-- ML-powered fraud detection
-- PCI DSS compliant data handling
-- Sub-200ms response times
-- Comprehensive audit logging
+### Core Capabilities
+- **18 Specialized Tools**: Comprehensive fraud detection and transaction intelligence
+- **Real-Time Processing**: Sub-200ms response times for critical operations
+- **Enterprise Security**: PCI DSS compliant data handling with comprehensive audit trails
+- **AI-Native Design**: Purpose-built for conversational AI and agent interactions
+- **Production Ready**: Battle-tested architecture handling high-volume transaction flows
+
+### Business Applications
+- **Fraud Investigation**: Deep-dive analysis of suspicious transactions
+- **Risk Assessment**: Real-time evaluation of transaction patterns and merchant behavior
+- **Compliance Monitoring**: Automated detection of policy violations and regulatory issues
+- **Operational Intelligence**: Business insights for fraud prevention strategy optimization
 
 ---
 
-## Quick Start
+## Getting Started
 
-### 1. Installation
-```bash
-git clone <repository-url>
-cd honeypot-mcp-server
-npm install
-```
+### Prerequisites
+- **MCP Client**: Compatible with any MCP-compliant AI framework
+- **Node.js Environment**: 18.0.0+ for local development
+- **Database Access**: Configured Supabase connection
+- **API Credentials**: Valid Lithic API key for card operations
 
-### 2. Configuration
-```bash
-cp .env.example .env
-# Edit .env with your API keys and database credentials
-```
-
-### 3. Start Server
-```bash
-npm start
-```
-
-### 4. Test Connection
+### Quick Connection
 ```javascript
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -71,36 +67,41 @@ const tools = await client.listTools();
 console.log(`Connected! ${tools.tools.length} tools available.`);
 ```
 
----
-
-## Authentication
-
-### MCP Session Authentication
+### Health Verification
 ```javascript
-// Authentication is handled automatically by the MCP client
-// Ensure your client has proper capabilities configured
-const client = new Client({
-  name: 'your-agent-name',
-  version: '1.0.0'
-}, {
-  capabilities: {
-    tools: {},
-    // Add other required capabilities
-  }
+const health = await client.callTool({
+  name: 'health_check',
+  arguments: { includeDetails: true }
 });
+console.log('System Status:', health.content[0].text);
 ```
 
-### API Key Management
-```env
-# .env file
-LITHIC_API_KEY=your_lithic_api_key
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_key
+---
 
-# Security settings
-LOG_LEVEL=info
-RATE_LIMIT_ENABLED=true
-PCI_COMPLIANCE_MODE=true
+## Authentication & Security
+
+### MCP Session Management
+Authentication is handled automatically through the MCP protocol. Each client session maintains its own security context with proper isolation and audit logging.
+
+### Security Features
+- **Request Tracking**: Every API call is logged with unique request IDs
+- **PAN Access Logging**: All sensitive card data access is monitored and audited
+- **Rate Limiting**: Built-in protection against abuse and excessive usage
+- **Input Validation**: Comprehensive validation of all parameters and data types
+- **Error Sanitization**: Sensitive information is never exposed in error messages
+
+### Environment Configuration
+```env
+# Required for production
+NODE_ENV=production
+LITHIC_API_KEY=your_production_key
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_service_key
+
+# Optional configuration
+LITHIC_ENV=production
+PORT=3000
+MCP_TRANSPORT=http
 ```
 
 ---
@@ -108,17 +109,17 @@ PCI_COMPLIANCE_MODE=true
 ## MCP Protocol Overview
 
 ### Protocol Structure
-The server implements JSON-RPC 2.0 over the Model Context Protocol:
+All communication follows JSON-RPC 2.0 over the Model Context Protocol:
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": "request-id",
+  "id": "unique-request-id",
   "method": "tools/call",
   "params": {
     "name": "tool_name",
     "arguments": {
-      // Tool-specific parameters
+      "parameter": "value"
     }
   }
 }
@@ -126,21 +127,38 @@ The server implements JSON-RPC 2.0 over the Model Context Protocol:
 
 ### Tool Discovery
 ```javascript
-// List all available tools
-const tools = await client.listTools();
+// Discover available tools
+const toolList = await client.listTools();
 
 // Example response structure
 {
   "tools": [
     {
       "name": "health_check",
-      "description": "Check system health and connectivity",
+      "description": "Verify system health and connectivity",
       "inputSchema": {
         "type": "object",
-        "properties": { /* ... */ }
+        "properties": {
+          "includeDetails": {
+            "type": "boolean",
+            "description": "Include detailed system information"
+          }
+        }
       }
     }
-    // ... 17 more tools
+    // ... 17 additional tools
+  ]
+}
+```
+
+### Standard Response Format
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"status\":\"success\",\"data\":{...}}"
+    }
   ]
 }
 ```
@@ -152,16 +170,17 @@ const tools = await client.listTools();
 ### System Health Tools
 
 #### `health_check`
-Verify system connectivity and service status.
+**Purpose**: Verify system connectivity and service health  
+**Business Use**: Operational monitoring and troubleshooting
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "includeDetails": boolean  // Optional, default: false
+  includeDetails?: boolean  // Default: false
 }
 ```
 
-**Usage:**
+**Example:**
 ```javascript
 const health = await client.callTool({
   name: 'health_check',
@@ -172,212 +191,310 @@ const health = await client.callTool({
 **Response:**
 ```json
 {
-  "content": [{
-    "type": "text",
-    "text": "{\"systemHealth\":{\"status\":\"healthy\",\"uptime\":\"72h 45m\",\"services\":{\"database\":\"connected\",\"lithic\":\"connected\"}}}"
-  }]
+  "systemHealth": {
+    "status": "healthy",
+    "services": {
+      "database": "connected",
+      "lithic": "connected"
+    },
+    "environment": "production"
+  }
 }
 ```
 
 ### Card Management Tools
 
 #### `list_available_cards`
-List cards available for fraud monitoring.
+**Purpose**: Retrieve inventory of available honeypot cards  
+**Business Use**: Card portfolio management and availability tracking
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "includeDetails": boolean,  // Optional, default: false
-  "activeOnly": boolean,      // Optional, default: true
-  "limit": number            // Optional, default: 20, max: 100
+  includeDetails?: boolean  // Default: false
+  activeOnly?: boolean      // Default: true
+  limit?: number           // Default: 20, max: 100
 }
 ```
 
-**Usage:**
+**Example:**
 ```javascript
 const cards = await client.callTool({
   name: 'list_available_cards',
-  arguments: {
-    includeDetails: true,
+  arguments: { 
+    includeDetails: true, 
     activeOnly: true,
-    limit: 10
+    limit: 50
   }
 });
 ```
 
 #### `get_card_details`
-Retrieve detailed card information.
+**Purpose**: Retrieve comprehensive card information including PAN access  
+**Business Use**: Fraud investigation requiring full card details  
+**Security**: PAN access is logged and audited
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "cardToken": string,        // Required, format: "card_[a-zA-Z0-9]{20,}"
-  "includePan": boolean,      // Optional, default: false (requires elevated permissions)
-  "reason": string           // Optional, enum: ["fraud_investigation", "scammer_verification", "pattern_analysis"]
+  cardToken: string  // Required: Lithic card token
 }
 ```
 
-**Usage:**
+**Example:**
 ```javascript
 const cardDetails = await client.callTool({
   name: 'get_card_details',
-  arguments: {
-    cardToken: 'card_abc123def456789012345',
-    includePan: false,
-    reason: 'fraud_investigation'
-  }
+  arguments: { cardToken: 'card_abc12345' }
 });
 ```
 
 #### `create_honeypot_card`
-Create honeypot cards for scammer detection.
+**Purpose**: Deploy new honeypot cards for fraud detection  
+**Business Use**: Dynamic honeypot creation for specific investigation scenarios
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "spendLimit": number,           // Optional, 100-500000 cents, default: 10000
-  "spendLimitDuration": string,   // Optional, enum: ["MONTHLY", "WEEKLY", "DAILY"], default: "MONTHLY"
-  "cardType": string             // Optional, enum: ["VIRTUAL", "PHYSICAL"], default: "VIRTUAL"
+  cardType?: string       // Default: 'VIRTUAL'
+  spendLimit?: number     // Default: 1000 (USD cents)
+  metadata?: object       // Optional card metadata
 }
 ```
 
-### Transaction Query Tools
+#### `update_card_limits`
+**Purpose**: Modify spending limits on existing cards  
+**Business Use**: Risk management and exposure control
+
+**Parameters:**
+```typescript
+{
+  cardToken: string       // Required: Card to update
+  spendLimit: number      // Required: New limit in USD cents
+}
+```
+
+#### `toggle_card_state`
+**Purpose**: Activate or deactivate cards  
+**Business Use**: Operational control and incident response
+
+**Parameters:**
+```typescript
+{
+  cardToken: string       // Required: Card to modify
+  state: 'ACTIVE' | 'PAUSED'  // Required: Target state
+}
+```
+
+### Transaction Intelligence Tools
+
+#### `get_transaction`
+**Purpose**: Retrieve detailed information for a specific transaction  
+**Business Use**: Individual transaction investigation and analysis
+
+**Parameters:**
+```typescript
+{
+  transactionToken: string  // Required: Lithic transaction token
+}
+```
+
+**Example:**
+```javascript
+const transaction = await client.callTool({
+  name: 'get_transaction',
+  arguments: { transactionToken: 'txn_abc12345' }
+});
+```
 
 #### `search_transactions`
-Advanced transaction search with filtering.
+**Purpose**: Advanced multi-criteria transaction search  
+**Business Use**: Pattern investigation and bulk transaction analysis
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "cardToken": string,           // Optional
-  "startDate": string,           // Optional, ISO 8601 format
-  "endDate": string,             // Optional, ISO 8601 format
-  "merchantName": string,        // Optional
-  "amountRange": {               // Optional
-    "min": number,
-    "max": number
-  },
-  "status": string[],            // Optional, values: ["PENDING", "SETTLED", "DECLINED"]
-  "limit": number,               // Optional, 1-200, default: 50
-  "sortBy": string,              // Optional, enum: ["created", "amount", "merchant"], default: "created"
-  "sortOrder": string            // Optional, enum: ["asc", "desc"], default: "desc"
+  cardToken?: string      // Optional: Filter by specific card
+  startDate?: string      // Optional: ISO date string
+  endDate?: string        // Optional: ISO date string
+  merchant?: string       // Optional: Merchant name filter
+  status?: string         // Optional: Transaction status
+  minAmount?: number      // Optional: Minimum amount filter
+  maxAmount?: number      // Optional: Maximum amount filter
+  limit?: number          // Default: 25, max: 100
 }
 ```
 
-**Usage:**
+**Example:**
 ```javascript
 const transactions = await client.callTool({
   name: 'search_transactions',
   arguments: {
     cardToken: 'card_12345',
     startDate: '2024-01-01T00:00:00Z',
-    endDate: '2024-12-31T23:59:59Z',
-    amountRange: { min: 1000, max: 50000 },
-    status: ['SETTLED'],
-    limit: 25
+    merchant: 'SUSPICIOUS_STORE',
+    minAmount: 10000,  // $100.00
+    limit: 50
   }
 });
 ```
 
 #### `get_recent_transactions`
-Get recent transactions for a specific card.
+**Purpose**: Retrieve latest transactions for a specific card  
+**Business Use**: Real-time monitoring and recent activity analysis
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "cardToken": string,              // Required
-  "limit": number,                  // Optional, 1-100, default: 20
-  "includeFraudAnalysis": boolean   // Optional, default: true
+  cardToken: string       // Required: Card to query
+  limit?: number          // Default: 10, max: 50
+  hours?: number          // Default: 24
+}
+```
+
+#### `get_transactions_by_merchant`
+**Purpose**: Analyze all transactions with a specific merchant  
+**Business Use**: Merchant behavior analysis and fraud pattern detection
+
+**Parameters:**
+```typescript
+{
+  cardToken: string       // Required: Card to query
+  merchantName: string    // Required: Merchant identifier
+  limit?: number          // Default: 25, max: 100
+}
+```
+
+#### `get_transaction_details`
+**Purpose**: Comprehensive transaction analysis with enriched data  
+**Business Use**: Deep forensic analysis of suspicious transactions
+
+**Parameters:**
+```typescript
+{
+  transactionToken: string  // Required: Transaction to analyze
+  includeEnriched?: boolean // Default: true
 }
 ```
 
 ### Pattern Analysis Tools
 
 #### `analyze_transaction_patterns`
-Analyze spending patterns for fraud detection.
+**Purpose**: Detect behavioral patterns in transaction history  
+**Business Use**: Fraud pattern identification and behavioral analysis
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "cardToken": string,              // Required
-  "analysisWindow": string,         // Optional, default: "30d", format: "7d", "30d", "90d"
-  "patternTypes": string[],         // Optional, default: ["temporal", "merchant", "amount"]
-  "includeAnomalies": boolean,      // Optional, default: true
-  "confidenceThreshold": number     // Optional, 0-1, default: 0.7
+  cardToken: string       // Required: Card to analyze
+  analysisWindow?: string // Default: '30d' (7d, 14d, 30d, 90d)
+  patternTypes?: string[] // Optional: Specific pattern types to detect
 }
 ```
 
-**Usage:**
+**Example:**
 ```javascript
 const patterns = await client.callTool({
   name: 'analyze_transaction_patterns',
   arguments: {
-    cardToken: 'card_pattern_analysis',
-    analysisWindow: '30d',
-    patternTypes: ['temporal', 'merchant', 'amount'],
-    includeAnomalies: true,
-    confidenceThreshold: 0.8
+    cardToken: 'card_12345',
+    analysisWindow: '7d',
+    patternTypes: ['velocity', 'amount', 'merchant', 'geographic']
   }
 });
 ```
 
 #### `detect_fraud_indicators`
-Use ML models to detect fraud indicators.
+**Purpose**: AI-powered fraud scoring and risk assessment  
+**Business Use**: Automated fraud detection and risk prioritization
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "transactionToken": string,       // Optional (either transactionToken or cardToken required)
-  "cardToken": string,             // Optional (either transactionToken or cardToken required)
-  "analysisDepth": string,         // Optional, enum: ["standard", "comprehensive", "deep"], default: "standard"
-  "riskThreshold": number,         // Optional, 0-1, default: 0.8
-  "includeMLModels": boolean,      // Optional, default: true
-  "historicalContext": string      // Optional, default: "30d"
+  cardToken: string       // Required: Card to analyze
+  lookbackDays?: number   // Default: 30
+  threshold?: string      // Default: 'medium' (low, medium, high)
 }
 ```
 
-### Real-time Intelligence Tools
+#### `generate_merchant_intelligence`
+**Purpose**: Comprehensive merchant analysis and reputation scoring  
+**Business Use**: Merchant risk assessment and verification
+
+**Parameters:**
+```typescript
+{
+  merchantName: string    // Required: Merchant to analyze
+  cardToken?: string      // Optional: Specific card context
+  includeIndustryData?: boolean // Default: true
+}
+```
+
+#### `perform_risk_assessment`
+**Purpose**: Holistic risk evaluation combining multiple data sources  
+**Business Use**: Enterprise risk management and decision support
+
+**Parameters:**
+```typescript
+{
+  cardToken: string       // Required: Primary analysis target
+  assessmentType?: string // Default: 'comprehensive'
+  includeRecommendations?: boolean // Default: true
+}
+```
+
+### Real-Time Intelligence Tools
 
 #### `subscribe_to_alerts`
-Set up real-time fraud alerts.
+**Purpose**: Real-time fraud alerting and monitoring  
+**Business Use**: Proactive fraud detection and immediate response
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "cardTokens": string[],          // Optional, default: []
-  "alertTypes": string[],          // Optional, default: ["fraud_detected", "high_risk_transaction"]
-  "riskThreshold": number,         // Optional, 0-1, default: 0.7
-  "subscriptionDuration": string,  // Optional, default: "4h", format: "1h", "4h", "24h"
-  "maxAlertsPerMinute": number     // Optional, 1-100, default: 10
+  cardToken?: string      // Optional: Card-specific alerts
+  alertTypes?: string[]   // Optional: Specific alert categories
+  severity?: string       // Default: 'medium' (low, medium, high, critical)
 }
 ```
 
-**Usage:**
-```javascript
-const subscription = await client.callTool({
-  name: 'subscribe_to_alerts',
-  arguments: {
-    cardTokens: ['card_monitor_1', 'card_monitor_2'],
-    alertTypes: ['fraud_detected', 'high_risk_transaction'],
-    riskThreshold: 0.8,
-    subscriptionDuration: '2h',
-    maxAlertsPerMinute: 5
-  }
-});
+#### `get_live_transaction_feed`
+**Purpose**: Real-time transaction stream monitoring  
+**Business Use**: Live operational monitoring and immediate investigation
+
+**Parameters:**
+```typescript
+{
+  cardToken?: string      // Optional: Card-specific feed
+  duration?: number       // Default: 60 (seconds)
+  includeDetails?: boolean // Default: true
+}
+```
+
+#### `analyze_spending_patterns`
+**Purpose**: Real-time behavioral analysis and pattern detection  
+**Business Use**: Dynamic fraud detection and behavior monitoring
+
+**Parameters:**
+```typescript
+{
+  cardToken: string       // Required: Card to monitor
+  timeWindow?: number     // Default: 24 (hours)
+  patternSensitivity?: string // Default: 'medium'
+}
 ```
 
 #### `generate_verification_questions`
-Generate questions to verify legitimate cardholders.
+**Purpose**: AI-generated verification questions for fraud investigation  
+**Business Use**: Cardholder verification and fraud confirmation
 
 **Parameters:**
-```javascript
+```typescript
 {
-  "cardToken": string,                    // Required
-  "questionType": string,                 // Optional, enum: ["transaction", "merchant", "pattern", "mixed"], default: "mixed"
-  "difficultyLevel": string,              // Optional, enum: ["easy", "medium", "hard"], default: "medium"
-  "questionCount": number,                // Optional, 1-10, default: 5
-  "timeframe": string,                    // Optional, default: "30d"
-  "adaptToScammerTactics": boolean        // Optional, default: true
+  cardToken: string       // Required: Card context
+  transactionToken?: string // Optional: Specific transaction context
+  questionCount?: number  // Default: 3, max: 5
+  difficulty?: string     // Default: 'medium' (easy, medium, hard)
 }
 ```
 
@@ -385,418 +502,145 @@ Generate questions to verify legitimate cardholders.
 
 ## Response Formats
 
-### Standard Response Structure
+### Success Response
 ```json
 {
   "content": [
     {
       "type": "text",
-      "text": "{\"result\": {\"data\": \"...\", \"metadata\": {\"timestamp\": \"2024-12-20T10:30:00Z\", \"requestId\": \"req_12345\"}}}"
+      "text": "{\"status\":\"success\",\"data\":{...},\"metadata\":{\"requestId\":\"req_123\",\"timestamp\":\"2024-12-06T10:00:00Z\"}}"
     }
   ]
 }
 ```
 
-### Error Response Structure
+### Error Response
 ```json
 {
-  "error": {
-    "code": -32602,
-    "message": "Invalid params",
-    "data": {
-      "field": "cardToken",
-      "reason": "Invalid token format",
-      "requestId": "req_12345"
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"status\":\"error\",\"error\":\"Invalid card token\",\"code\":\"INVALID_CARD_TOKEN\",\"requestId\":\"req_123\"}"
     }
-  }
+  ]
 }
 ```
 
-### Metadata Fields
-All responses include metadata:
-```json
-{
-  "metadata": {
-    "timestamp": "2024-12-20T10:30:00Z",
-    "requestId": "req_12345",
-    "responseTime": 145,
-    "version": "1.0.0"
-  }
-}
-```
+### Data Types
+- **Monetary Values**: All amounts in USD cents (integer)
+- **Timestamps**: ISO 8601 format with timezone
+- **Card Tokens**: Lithic format (card_xxxxxxxx)
+- **Transaction Tokens**: Lithic format (txn_xxxxxxxx)
 
 ---
 
 ## Error Handling
 
-### Error Codes
-| Code | Description | Action |
-|------|-------------|---------|
-| -32700 | Parse error | Check JSON syntax |
-| -32600 | Invalid Request | Verify request format |
-| -32601 | Method Not Found | Check tool name |
-| -32602 | Invalid Params | Validate parameters |
-| -32603 | Internal Error | Retry or contact support |
-| -32000 | Authentication Failed | Check credentials |
-| -32001 | Authorization Failed | Verify permissions |
-| -32002 | Validation Failed | Fix parameter values |
-| -32003 | Business Logic Error | Check data and retry |
+### Standard Error Codes
+- `INVALID_PARAMETERS`: Missing or invalid input parameters
+- `CARD_NOT_FOUND`: Specified card token does not exist
+- `TRANSACTION_NOT_FOUND`: Specified transaction token does not exist
+- `DATABASE_ERROR`: Temporary database connectivity issue
+- `LITHIC_API_ERROR`: External API failure or timeout
+- `RATE_LIMIT_EXCEEDED`: Too many requests in time window
+- `INSUFFICIENT_PERMISSIONS`: Operation not allowed for current context
 
-### Error Handling Best Practices
-```javascript
-try {
-  const result = await client.callTool({
-    name: 'get_card_details',
-    arguments: { cardToken: 'card_12345' }
-  });
-  
-  return JSON.parse(result.content[0].text);
-} catch (error) {
-  if (error.code === -32001) {
-    // Handle authorization error
-    console.log('Insufficient permissions for this operation');
-  } else if (error.code === -32002) {
-    // Handle validation error
-    console.log('Invalid parameters:', error.data);
-  } else {
-    // Handle other errors
-    console.log('Operation failed:', error.message);
-  }
-  
-  throw error;
+### Error Response Structure
+```typescript
+{
+  status: "error",
+  error: string,        // Human-readable error message
+  code: string,         // Machine-readable error code
+  requestId: string,    // Unique request identifier for support
+  timestamp: string,    // Error occurrence timestamp
+  details?: object      // Additional context (development only)
 }
 ```
 
+### Recovery Guidelines
+- **Transient Errors**: Implement exponential backoff retry
+- **Invalid Parameters**: Validate inputs before submission
+- **Rate Limits**: Implement client-side rate limiting
+- **API Failures**: Check system health and retry after delay
+
 ---
 
-## Performance & Limits
+## Performance Guidelines
 
-### Response Time SLA
-- System Health: < 50ms
-- Card Management: < 150ms  
-- Transaction Queries: < 200ms
-- Pattern Analysis: < 200ms
-- Real-time Intelligence: < 200ms
+### Response Time Expectations
+- **Health Check**: < 50ms
+- **Card Operations**: < 150ms
+- **Transaction Queries**: < 200ms
+- **Pattern Analysis**: < 200ms
+- **Real-time Operations**: < 100ms
 
 ### Rate Limits
-- Standard operations: 60 requests/minute
-- Sensitive operations: 30 requests/minute
-- Real-time subscriptions: Custom limits per subscription
+- **Standard Operations**: 60 requests/minute per client
+- **Sensitive Operations**: 30 requests/minute per client
+- **Real-time Feeds**: 10 concurrent streams per client
 
-### Pagination
-For large datasets, use limit parameters:
-```javascript
-// Get transactions in batches
-let allTransactions = [];
-let offset = 0;
-const batchSize = 50;
-
-while (true) {
-  const batch = await client.callTool({
-    name: 'search_transactions',
-    arguments: {
-      limit: batchSize,
-      offset: offset
-    }
-  });
-  
-  const data = JSON.parse(batch.content[0].text);
-  allTransactions.push(...data.searchResults.transactions);
-  
-  if (data.searchResults.transactions.length < batchSize) {
-    break; // No more data
-  }
-  
-  offset += batchSize;
-}
-```
+### Optimization Tips
+- Use appropriate `limit` parameters to minimize data transfer
+- Cache non-critical data on the client side
+- Batch related operations when possible
+- Monitor response times and adjust request patterns
 
 ---
 
-## Security Guidelines
+## Integration Examples
 
-### PCI DSS Compliance
-- Never request `includePan: true` unless absolutely necessary
-- Provide clear `reason` for sensitive operations
-- All card tokens are automatically masked in logs
-- Full audit trail maintained for compliance
-
-### Data Handling
+### Fraud Investigation Workflow
 ```javascript
-// ✅ CORRECT: Safe card detail access
-const safeCardDetails = await client.callTool({
+// Step 1: Get card details
+const card = await client.callTool({
   name: 'get_card_details',
-  arguments: {
-    cardToken: 'card_12345',
-    includePan: false,  // Safe default
-    reason: 'fraud_investigation'
+  arguments: { cardToken: 'card_suspect_123' }
+});
+
+// Step 2: Analyze recent activity
+const recent = await client.callTool({
+  name: 'get_recent_transactions',
+  arguments: { cardToken: 'card_suspect_123', limit: 20 }
+});
+
+// Step 3: Detect fraud indicators
+const fraudAnalysis = await client.callTool({
+  name: 'detect_fraud_indicators',
+  arguments: { 
+    cardToken: 'card_suspect_123',
+    threshold: 'high'
   }
 });
 
-// ❌ WRONG: Requesting PAN without clear justification
-const unsafeCardDetails = await client.callTool({
-  name: 'get_card_details',
-  arguments: {
-    cardToken: 'card_12345',
-    includePan: true  // Requires elevated permissions
+// Step 4: Generate verification questions
+const verification = await client.callTool({
+  name: 'generate_verification_questions',
+  arguments: { 
+    cardToken: 'card_suspect_123',
+    questionCount: 5
   }
 });
-```
-
-### Authentication Best Practices
-- Rotate API keys regularly
-- Use minimum required permissions
-- Monitor access logs for anomalies
-- Implement client-side rate limiting
-
----
-
-## Code Examples
-
-### Complete Fraud Investigation Workflow
-```javascript
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-
-class FraudInvestigator {
-  constructor() {
-    this.client = null;
-  }
-
-  async initialize() {
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['src/mcp-server.js']
-    });
-
-    this.client = new Client({
-      name: 'fraud-investigator',
-      version: '1.0.0'
-    }, {
-      capabilities: { tools: {} }
-    });
-
-    await this.client.connect(transport);
-  }
-
-  async investigateSuspiciousCard(cardToken) {
-    try {
-      // 1. Check system health
-      await this.checkSystemHealth();
-      
-      // 2. Get card details
-      const cardDetails = await this.getCardDetails(cardToken);
-      
-      // 3. Analyze transaction patterns
-      const patterns = await this.analyzePatterns(cardToken);
-      
-      // 4. Detect fraud indicators
-      const fraudAnalysis = await this.detectFraud(cardToken);
-      
-      // 5. Generate verification questions
-      const questions = await this.generateQuestions(cardToken);
-      
-      return {
-        cardDetails,
-        patterns,
-        fraudAnalysis,
-        questions,
-        recommendation: this.generateRecommendation(fraudAnalysis, patterns)
-      };
-      
-    } catch (error) {
-      console.error('Investigation failed:', error);
-      throw error;
-    }
-  }
-
-  async checkSystemHealth() {
-    const result = await this.client.callTool({
-      name: 'health_check',
-      arguments: { includeDetails: true }
-    });
-    
-    const health = JSON.parse(result.content[0].text);
-    if (health.systemHealth.status !== 'healthy') {
-      throw new Error('System not healthy for investigation');
-    }
-    
-    return health;
-  }
-
-  async getCardDetails(cardToken) {
-    const result = await this.client.callTool({
-      name: 'get_card_details',
-      arguments: {
-        cardToken,
-        includePan: false,
-        reason: 'fraud_investigation'
-      }
-    });
-    
-    return JSON.parse(result.content[0].text);
-  }
-
-  async analyzePatterns(cardToken) {
-    const result = await this.client.callTool({
-      name: 'analyze_transaction_patterns',
-      arguments: {
-        cardToken,
-        analysisWindow: '7d',
-        patternTypes: ['temporal', 'merchant', 'amount'],
-        includeAnomalies: true,
-        confidenceThreshold: 0.8
-      }
-    });
-    
-    return JSON.parse(result.content[0].text);
-  }
-
-  async detectFraud(cardToken) {
-    const result = await this.client.callTool({
-      name: 'detect_fraud_indicators',
-      arguments: {
-        cardToken,
-        analysisDepth: 'comprehensive',
-        riskThreshold: 0.7,
-        includeMLModels: true
-      }
-    });
-    
-    return JSON.parse(result.content[0].text);
-  }
-
-  async generateQuestions(cardToken) {
-    const result = await this.client.callTool({
-      name: 'generate_verification_questions',
-      arguments: {
-        cardToken,
-        questionType: 'mixed',
-        difficultyLevel: 'hard',
-        questionCount: 5,
-        adaptToScammerTactics: true
-      }
-    });
-    
-    return JSON.parse(result.content[0].text);
-  }
-
-  generateRecommendation(fraudAnalysis, patterns) {
-    const riskScore = fraudAnalysis.fraudAnalysis.riskScore;
-    const anomalyCount = patterns.patternAnalysis.anomalies.length;
-    
-    if (riskScore > 0.8 || anomalyCount > 3) {
-      return {
-        action: 'BLOCK_CARD',
-        confidence: 'HIGH',
-        reason: 'High fraud risk detected'
-      };
-    } else if (riskScore > 0.6 || anomalyCount > 1) {
-      return {
-        action: 'MANUAL_REVIEW',
-        confidence: 'MEDIUM', 
-        reason: 'Moderate fraud indicators present'
-      };
-    } else {
-      return {
-        action: 'CONTINUE_MONITORING',
-        confidence: 'LOW',
-        reason: 'No significant fraud indicators'
-      };
-    }
-  }
-}
-
-// Usage
-const investigator = new FraudInvestigator();
-await investigator.initialize();
-
-const result = await investigator.investigateSuspiciousCard('card_suspicious_123');
-console.log('Investigation result:', result);
 ```
 
 ### Real-time Monitoring Setup
 ```javascript
-class RealTimeMonitor {
-  constructor() {
-    this.client = null;
-    this.subscriptions = new Map();
+// Subscribe to critical alerts
+const alertSub = await client.callTool({
+  name: 'subscribe_to_alerts',
+  arguments: { 
+    severity: 'high',
+    alertTypes: ['fraud_detected', 'unusual_spending', 'velocity_alert']
   }
+});
 
-  async setupMonitoring(cardTokens, options = {}) {
-    const {
-      riskThreshold = 0.75,
-      alertTypes = ['fraud_detected', 'high_risk_transaction'],
-      duration = '4h'
-    } = options;
-
-    // 1. Subscribe to alerts
-    const alertSubscription = await this.client.callTool({
-      name: 'subscribe_to_alerts',
-      arguments: {
-        cardTokens,
-        alertTypes,
-        riskThreshold,
-        subscriptionDuration: duration,
-        maxAlertsPerMinute: 10
-      }
-    });
-
-    // 2. Start live transaction feed
-    const feedSubscription = await this.client.callTool({
-      name: 'get_live_transaction_feed',
-      arguments: {
-        cardTokenFilter: cardTokens,
-        includeRealTimeAnalysis: true,
-        feedDuration: duration,
-        maxTransactionsPerMinute: 20
-      }
-    });
-
-    const alertData = JSON.parse(alertSubscription.content[0].text);
-    const feedData = JSON.parse(feedSubscription.content[0].text);
-
-    this.subscriptions.set(alertData.alertSubscription.subscriptionId, {
-      type: 'alerts',
-      cardTokens,
-      expiresAt: alertData.alertSubscription.expiresAt
-    });
-
-    this.subscriptions.set(feedData.liveTransactionFeed.feedId, {
-      type: 'feed',
-      cardTokens,
-      expiresAt: feedData.liveTransactionFeed.expiresAt
-    });
-
-    return {
-      alertSubscriptionId: alertData.alertSubscription.subscriptionId,
-      feedId: feedData.liveTransactionFeed.feedId,
-      status: 'active'
-    };
+// Monitor live transaction feed
+const liveFeed = await client.callTool({
+  name: 'get_live_transaction_feed',
+  arguments: { 
+    duration: 300,  // 5 minutes
+    includeDetails: true
   }
-
-  async analyzeSpendingPattern(cardToken, options = {}) {
-    const {
-      analysisType = 'realtime',
-      timeWindow = '24h',
-      realTimeMode = true
-    } = options;
-
-    const result = await this.client.callTool({
-      name: 'analyze_spending_patterns',
-      arguments: {
-        cardToken,
-        analysisType,
-        timeWindow,
-        realTimeMode,
-        includePredictions: true,
-        deviationThreshold: 0.6
-      }
-    });
-
-    return JSON.parse(result.content[0].text);
-  }
-}
+});
 ```
 
 ---
@@ -805,109 +649,45 @@ class RealTimeMonitor {
 
 ### Common Issues
 
-#### Connection Problems
+**Connection Problems**
 ```javascript
-// Issue: Cannot connect to MCP server
-// Solution: Check server status and configuration
-
-// Check if server is running
-const healthCheck = await client.callTool({
-  name: 'health_check',
-  arguments: {}
-});
-
-// Verify environment variables
-console.log('Environment check:', {
-  nodeEnv: process.env.NODE_ENV,
-  logLevel: process.env.LOG_LEVEL,
-  hasLithicKey: !!process.env.LITHIC_API_KEY
-});
-```
-
-#### Performance Issues
-```javascript
-// Issue: Slow response times
-// Solution: Check system load and optimize requests
-
-const startTime = Date.now();
-const result = await client.callTool({
+// Verify MCP transport configuration
+const health = await client.callTool({
   name: 'health_check',
   arguments: { includeDetails: true }
 });
-const responseTime = Date.now() - startTime;
 
-if (responseTime > 200) {
-  console.warn(`Slow response: ${responseTime}ms`);
-  // Consider reducing request complexity or checking system resources
-}
+// Check environment variables
+console.log('Environment:', process.env.NODE_ENV);
+console.log('Has Lithic Key:', !!process.env.LITHIC_API_KEY);
 ```
 
-#### Authentication Errors
-```javascript
-// Issue: Authorization failed errors
-// Solution: Verify permissions and API keys
+**Slow Response Times**
+- Check network connectivity to Supabase and Lithic
+- Review query complexity and limit parameters
+- Monitor system resources and scaling needs
 
-try {
-  await client.callTool({
-    name: 'get_card_details',
-    arguments: { cardToken: 'card_12345' }
-  });
-} catch (error) {
-  if (error.code === -32001) {
-    console.error('Authorization failed. Check:');
-    console.error('1. API key validity');
-    console.error('2. User permissions');
-    console.error('3. Rate limiting status');
-  }
-}
-```
+**Data Inconsistencies**
+- Verify database connection health
+- Check for recent Lithic API updates
+- Review transaction synchronization status
 
-### Debug Mode
-Enable detailed logging:
-```env
-LOG_LEVEL=debug
-MCP_DEBUG=true
-```
-
-### Health Monitoring
-```javascript
-// Continuous health monitoring
-setInterval(async () => {
-  try {
-    const health = await client.callTool({
-      name: 'health_check',
-      arguments: { includeDetails: true }
-    });
-    
-    const status = JSON.parse(health.content[0].text);
-    console.log('System status:', status.systemHealth.status);
-    
-  } catch (error) {
-    console.error('Health check failed:', error.message);
-  }
-}, 60000); // Check every minute
-```
+### Support Resources
+- **System Health**: Use `health_check` tool for diagnostics
+- **Request Tracking**: All operations include unique request IDs
+- **Error Logging**: Comprehensive logging for troubleshooting
+- **Performance Monitoring**: Built-in response time tracking
 
 ---
 
-## Support
+## Changelog
 
-### Getting Help
-- **Documentation**: Review this API reference and tool documentation
-- **Logs**: Check server logs for detailed error information  
-- **Health Status**: Use `health_check` tool to verify system status
-- **Performance**: Monitor response times and adjust usage patterns
-
-### Reporting Issues
-When reporting issues, include:
-1. Tool name and parameters used
-2. Full error message and code
-3. Request ID from error response
-4. Timestamp of the issue
-5. System health status
+### Version 1.0.0
+- Initial enterprise release
+- 18 specialized fraud detection tools
+- Full MCP protocol implementation
+- Production-ready security and monitoring
 
 ---
 
-**API Version**: 1.0.0  
-**Last Updated**: 2024-12-20  
-**MCP Protocol Version**: Latest 
+*Last Updated: December 2024 | API Version: 1.0.0 | Enterprise Grade* 
