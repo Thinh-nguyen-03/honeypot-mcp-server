@@ -342,9 +342,6 @@ async function main() {
       // Store transports by session ID for StreamableHTTP
       const transports = {};
       
-      // Track SSE connections for debugging
-      const sseConnections = new Map();
-      
       // Handle OPTIONS requests for CORS preflight
       app.options('/mcp', (req, res) => {
         logger.info('Received OPTIONS request for CORS preflight');
@@ -374,25 +371,6 @@ async function main() {
           res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
           res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id, Accept');
           
-          // Check if this is a Vapi request or browser request that needs accept header fix
-          const userAgent = req.headers['user-agent'] || '';
-          const needsAcceptFix = userAgent.includes('node') || userAgent.includes('Mozilla') || 
-                               !req.headers.accept?.includes('text/event-stream');
-          
-          if (needsAcceptFix) {
-            logger.info('Detected client needing accept header fix', { 
-              userAgent: userAgent.substring(0, 50),
-              originalAccept: req.headers.accept 
-            });
-            // Fix accept header to include what the transport expects
-            const originalAccept = req.headers.accept || '*/*';
-            req.headers.accept = `application/json, text/event-stream, ${originalAccept}`;
-            logger.info('Modified accept header', { newAccept: req.headers.accept });
-          }
-          
-          // Check if this is an SSE client (like Vapi) that needs special handling
-          const isSSEClient = userAgent.includes('node') || userAgent.includes('Vapi');
-          
           // Optional: Handle authorization header if present (but don't require it)
           const authHeader = req.headers.authorization;
           if (authHeader) {
@@ -403,139 +381,7 @@ async function main() {
             // Note: We log but don't validate the token since server doesn't require auth
           }
           
-          // For SSE clients, we need to handle responses differently
-          if (isSSEClient) {
-            logger.info('Detected SSE client, using SSE response handling');
-            
-            // Find matching SSE connection by looking for active connections
-            let sseSessionId = null;
-            let sseConnection = null;
-            
-            // Look for the most recent SSE connection (Vapi typically has one active connection)
-            for (const [sessionId, connection] of sseConnections.entries()) {
-              if (Date.now() - connection.lastActivity < 120000) { // Within 2 minutes
-                sseSessionId = sessionId;
-                sseConnection = connection;
-                break;
-              }
-            }
-            
-            if (sseConnection) {
-              logger.info('Found matching SSE connection for POST response', {
-                sessionId: sseSessionId.substring(0, 8) + '...'
-              });
-              
-              // Create a mock response object that captures the response for SSE
-              const mockRes = {
-                headersSent: false,
-                statusCode: 200,
-                _headers: {},
-                locals: {},
-                setHeader: function(name, value) {
-                  this._headers[name] = value;
-                  return this;
-                },
-                getHeader: function(name) {
-                  return this._headers[name];
-                },
-                getHeaders: function() {
-                  return { ...this._headers };
-                },
-                removeHeader: function(name) {
-                  delete this._headers[name];
-                  return this;
-                },
-                writeHead: function(statusCode, headers) {
-                  this.statusCode = statusCode;
-                  if (headers) {
-                    Object.assign(this._headers, headers);
-                  }
-                  return this;
-                },
-                write: function(data) {
-                  // Send the MCP response through SSE
-                  try {
-                    const responseData = typeof data === 'string' ? data : JSON.stringify(data);
-                    sseConnection.res.write(`event: message\n`);
-                    sseConnection.res.write(`data: ${responseData}\n\n`);
-                    if (sseConnection.res.flush) sseConnection.res.flush();
-                    logger.info('Sent MCP response through SSE', {
-                      sessionId: sseSessionId.substring(0, 8) + '...',
-                      responseSize: responseData.length
-                    });
-                  } catch (error) {
-                    logger.error('Error sending SSE response:', error);
-                  }
-                  return this;
-                },
-                end: function(data) {
-                  if (data) {
-                    this.write(data);
-                  }
-                  this.headersSent = true;
-                  return this;
-                },
-                status: function(code) {
-                  this.statusCode = code;
-                  return this;
-                },
-                json: function(obj) {
-                  this.setHeader('Content-Type', 'application/json');
-                  return this.end(JSON.stringify(obj));
-                },
-                send: function(data) {
-                  return this.end(data);
-                },
-                sendStatus: function(code) {
-                  this.statusCode = code;
-                  return this.end();
-                },
-                // Add event emitter methods that might be expected
-                on: function() { return this; },
-                emit: function() { return this; },
-                once: function() { return this; },
-                removeListener: function() { return this; }
-              };
-              
-              // Create transport and handle request using mock response
-              const sessionId = randomUUID();
-              const transport = new StreamableHTTPServerTransport({
-                sessionIdGenerator: () => sessionId
-              });
-
-              const server = createMcpServer();
-              await server.connect(transport);
-              
-              try {
-                logger.info('About to call transport.handleRequest with SSE response handler');
-                await transport.handleRequest(req, mockRes, req.body);
-                
-                // Send success response to the POST request
-                res.status(200).json({ success: true });
-                
-                logger.info('SSE transport.handleRequest completed successfully', {
-                  method: req.body?.method,
-                  requestId: req.body?.id
-                });
-                
-                return;
-              } catch (sseError) {
-                logger.error('Error in SSE transport handling:', {
-                  error: sseError.message,
-                  stack: sseError.stack,
-                  method: req.body?.method,
-                  requestId: req.body?.id,
-                  sessionId: sseSessionId.substring(0, 8) + '...'
-                });
-                // Fall through to normal handling if SSE fails
-              }
-            } else {
-              logger.warn('No active SSE connection found for SSE client POST request');
-              // Fall through to normal handling
-            }
-          }
-          
-          // Normal StreamableHTTP handling for non-SSE clients
+          // StreamableHTTP handling
           const sessionId = req.headers['mcp-session-id'];
           let transport;
 
@@ -628,90 +474,18 @@ async function main() {
         }
       });
 
-      // Handle GET requests for server-to-client notifications via SSE (StreamableHTTP)
+      // Handle GET requests for server-to-client notifications (StreamableHTTP)
       app.get('/mcp', async (req, res) => {
         try {
-          logger.info('Received GET request to /mcp for StreamableHTTP SSE notifications');
+          logger.info('Received GET request to /mcp for StreamableHTTP');
           
-          // Check if this is a request expecting traditional SSE (like Vapi) or browser access
-          const userAgent = req.headers['user-agent'] || '';
-          const acceptHeader = req.headers['accept'] || '';
-          
-          // Detect SSE clients: Vapi (node), browsers, or explicit text/event-stream requests
-          const isSSEClient = userAgent.includes('node') || 
-                             acceptHeader.includes('text/event-stream') ||
-                             acceptHeader.includes('text/html') || 
-                             !req.headers['mcp-session-id']; // No session ID likely means initial SSE connection
-          
-          if (isSSEClient) {
-            logger.info('Detected traditional SSE client (likely Vapi), providing classic SSE response', {
-              userAgent: userAgent.substring(0, 50),
-              acceptHeader: acceptHeader.substring(0, 100),
-              hasSessionId: !!req.headers['mcp-session-id'],
-              remoteAddress: req.ip || req.connection.remoteAddress
-            });
-            
-            // Generate session ID for this SSE connection
-            const sessionId = randomUUID();
-            
-            // Set SSE headers
-            res.writeHead(200, {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              'Connection': 'keep-alive',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Headers': 'Cache-Control',
-              'mcp-session-id': sessionId
-            });
-            
-            // Store SSE connection for later use in POST responses
-            sseConnections.set(sessionId, { res, lastActivity: Date.now() });
-            
-            // Send SSE endpoint event with fully qualified URL (required by Vapi/Copilot Studio)
-            const host = req.get('host');
-            const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-            const fullEndpointUrl = `${protocol}://${host}/mcp`;
-            
-            logger.info('Sending SSE endpoint event', { 
-              sessionId: sessionId.substring(0, 8) + '...',
-              endpointUrl: fullEndpointUrl 
-            });
-            
-            res.write(`event: endpoint\n`);
-            res.write(`data: ${fullEndpointUrl}\n\n`);
-            
-            // Immediately flush the response to ensure Vapi receives it
-            if (res.flush) res.flush();
-            
-            // Keep connection alive and handle cleanup
-            const keepAlive = setInterval(() => {
-              res.write(`event: ping\n`);
-              res.write(`data: ${Date.now()}\n\n`);
-              sseConnections.get(sessionId).lastActivity = Date.now();
-            }, 30000);
-            
-            req.on('close', () => {
-              logger.info(`SSE connection closed for session: ${sessionId.substring(0, 8)}...`);
-              clearInterval(keepAlive);
-              sseConnections.delete(sessionId);
-            });
-            
-            // Log successful SSE setup
-            logger.info('SSE connection established successfully', {
-              sessionId: sessionId.substring(0, 8) + '...',
-              clientIP: req.ip || req.connection.remoteAddress
-            });
-            
-            return;
-          }
-          
-          // Original Streamable HTTP handling for other clients
+          // StreamableHTTP handling
           let sessionId = req.headers['mcp-session-id'] || req.query.sessionId;
           
-          // If no session ID provided, generate one for Streamable HTTP compatibility
+          // If no session ID provided, generate one for Streamable HTTP
           if (!sessionId) {
             sessionId = randomUUID();
-            logger.info('No session ID provided, generating new one for Streamable HTTP compatibility', { 
+            logger.info('No session ID provided, generating new one for Streamable HTTP', { 
               newSessionId: `${sessionId.substring(0, 8)}...` 
             });
           }
