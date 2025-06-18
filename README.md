@@ -1,128 +1,40 @@
-# Honeypot MCP Server - Enterprise Fraud Detection Platform
+# Honeypot MCP Server
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![PCI DSS](https://img.shields.io/badge/Compliance-PCI%20DSS-blue.svg)]()
-[![Security Grade](https://img.shields.io/badge/Security-Enterprise%20Grade-purple.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Executive Summary
+## Overview
 
-The **Honeypot MCP Server** is an enterprise-grade fraud detection and transaction intelligence platform that transforms traditional financial monitoring into AI-accessible services. Built on the Model Context Protocol (MCP), this system provides real-time fraud detection capabilities with sub-200ms response times while maintaining PCI DSS compliance and bank-grade security standards.
+The Honeypot MCP Server is a transaction monitoring system built on the Model Context Protocol (MCP). It provides AI agents with tools to monitor and analyze transactions from Lithic honeypot cards for fraud detection and investigation purposes.
 
-### Business Value Proposition
+## Features
 
-- **Operational Efficiency**: Reduce fraud investigation time by 80% through AI-powered analysis
-- **Risk Mitigation**: Real-time transaction monitoring prevents financial losses before they occur
-- **Regulatory Compliance**: PCI DSS Level 1 compliant with comprehensive audit trails
-- **Scalability**: Handle 10,000+ transactions per minute with linear scaling
-- **Cost Reduction**: Automate manual fraud detection processes, reducing operational overhead
+- **18 MCP Tools**: Comprehensive set of tools for transaction monitoring and fraud investigation
+- **Transaction Analysis**: Rule-based pattern detection and fraud indicators
+- **Card Management**: Create and manage honeypot cards via Lithic API
+- **Real-time Monitoring**: Health checks and transaction monitoring capabilities
+- **MCP Protocol**: Native support for Model Context Protocol with HTTP and Stdio transports
 
----
-
-## 🎯 Key Features & Capabilities
-
-### Core Capabilities
-- **Real-Time Fraud Detection**: ML-powered analysis with <200ms response SLA
-- **Comprehensive Transaction Intelligence**: 18 specialized tools for fraud investigation
-- **Enterprise Security**: Bank-grade security with end-to-end encryption and audit logging
-- **AI Integration**: Native Model Context Protocol (MCP) support for conversational AI
-- **Regulatory Compliance**: PCI DSS Level 1, SOX, and GDPR compliant architecture
-
-### Performance SLAs
-- **Response Time**: 95th percentile < 200ms
-- **Availability**: 99.9% uptime guarantee
-- **Throughput**: 10,000+ transactions/minute
-- **Data Consistency**: ACID compliance with real-time replication
-- **Recovery Time**: < 15 minutes RTO, < 1 hour RPO
-
-### Security Standards
-- **Encryption**: AES-256 at rest, TLS 1.3 in transit
-- **Authentication**: JWT with refresh token rotation
-- **Authorization**: Role-based access control (RBAC)
-- **Audit**: Comprehensive logging per PCI DSS requirements
-- **Monitoring**: Real-time security event detection
-
----
-
-## 🏗️ Enterprise Architecture
-
-### Technology Stack
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    AI Agent Layer                           │
-│              (MCP Protocol Integration)                     │
-├─────────────────────────────────────────────────────────────┤
-│                 Application Layer                           │
-│        18 Fraud Detection Tools │ Security Middleware      │
-├─────────────────────────────────────────────────────────────┤
-│                   Service Layer                             │
-│  Transaction │ Card Management │ Pattern Analysis          │
-├─────────────────────────────────────────────────────────────┤
-│                    Data Layer                               │
-│     Supabase (PostgreSQL) │ Lithic API │ Cache Layer       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Infrastructure Components
-- **Runtime**: Node.js 18+ with ES Modules (Production-hardened)
-- **Database**: Supabase (PostgreSQL 15+) with real-time capabilities
-- **Financial API**: Lithic Virtual Card Platform
-- **Protocol**: Model Context Protocol (MCP) for AI integration
-- **Security**: Enterprise-grade validation, encryption, and monitoring
-
----
-
-## 🛡️ Security & Compliance
-
-### PCI DSS Compliance
-- **Data Protection**: Sensitive card data encrypted with AES-256
-- **Access Control**: Role-based permissions with principle of least privilege
-- **Monitoring**: Continuous security monitoring and alerting
-- **Audit Trails**: Comprehensive logging of all PAN access attempts
-- **Network Security**: WAF, DDoS protection, and secure API endpoints
-
-### Data Privacy & GDPR
-- **Data Minimization**: Only collect necessary transaction data
-- **Right to Erasure**: Automated data deletion processes
-- **Consent Management**: Explicit consent tracking and management
-- **Data Portability**: Standardized export formats available
-- **Breach Notification**: Automated incident response procedures
-
-### Enterprise Security Features
-- **Zero Trust Architecture**: All connections verified and encrypted
-- **Multi-Factor Authentication**: Required for administrative access
-- **Intrusion Detection**: Real-time threat monitoring and response
-- **Vulnerability Management**: Automated security scanning and patching
-- **Business Continuity**: Disaster recovery and backup procedures
-
----
-
-## 🚀 Quick Start Guide
+## Quick Start
 
 ### Prerequisites
-- **Node.js** 18.0.0+ (LTS recommended)
-- **Enterprise Accounts**: Supabase Pro, Lithic Production API
-- **Security**: SSL certificates, firewall configuration
-- **Monitoring**: Application performance monitoring setup
 
-### 1. Installation
+- Node.js 18.0.0+
+- Supabase account and database
+- Lithic API access
+
+### Installation
+
 ```bash
-git clone https://github.com/your-org/honeypot-mcp-server.git
+git clone <repository-url>
 cd honeypot-mcp-server
-npm ci --production
+npm ci
 ```
 
-### 2. Enterprise Configuration
-```bash
-# Copy enterprise configuration template
-cp .env.enterprise .env
+### Configuration
 
-# Configure with enterprise credentials
-vim .env
-```
+Create a `.env` file with the following variables:
 
-**Required Environment Variables:**
 ```env
 # Core Configuration
 NODE_ENV=production
@@ -130,10 +42,10 @@ PORT=3000
 
 # Database
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your_production_service_key
+SUPABASE_SERVICE_KEY=your_service_key
 
 # Financial API
-LITHIC_API_KEY=your_production_lithic_key
+LITHIC_API_KEY=your_lithic_api_key
 LITHIC_ENV=production
 
 # Optional Features
@@ -143,187 +55,151 @@ POLLING_INTERVAL_MS=5000
 MCP_TRANSPORT=http
 ```
 
-### 3. Database Migration
-```bash
-# Run enterprise database setup
-npm run db:migrate:production
-npm run db:seed:minimal
+### Testing
 
-# Verify data integrity
-npm run db:verify
+```bash
+# Run test suite
+npm test
+
+# Run security tests
+npm run test:security
+
+# Run performance tests
+npm run test:performance
 ```
 
-### 4. Security Validation
-```bash
-# Run comprehensive security checks
-npm run security:audit
-npm run compliance:validate
+### Running
 
-# Performance baseline testing
-npm run perf:baseline
+```bash
+# Start the server
+npm start
+
+# Check health
+curl http://localhost:3000/health
 ```
 
-### 5. Production Deployment
-```bash
-# Start with monitoring
-npm run start:production
+## MCP Tools
 
-# Verify operational status
-curl -H "Authorization: Bearer $API_TOKEN" \
-     https://your-domain.com/health
-```
+The server provides 18 tools organized by category:
 
----
+### System Operations (1 tool)
+- `health_check` - System health monitoring
 
-## 🛠️ MCP Tools Suite
+### Card Management (5 tools)
+- `list_available_cards` - List available honeypot cards
+- `get_card_details` - Get detailed card information
+- `create_honeypot_card` - Create new honeypot cards
+- `update_card_limits` - Update card spending limits
+- `toggle_card_state` - Activate/deactivate cards
 
-The platform provides 18 enterprise-grade tools organized by functional domains:
+### Transaction Intelligence (5 tools)
+- `get_transaction` - Get single transaction details
+- `search_transactions` - Search transactions with filters
+- `get_recent_transactions` - Get recent transactions for a card
+- `get_transactions_by_merchant` - Get transactions by merchant
+- `get_transaction_details` - Get comprehensive transaction information
 
-### 1. System Operations (1 tool)
-- **`health_check`** - Comprehensive system health monitoring with dependency verification
+### Pattern Analysis (4 tools)
+- `analyze_transaction_patterns` - Analyze spending patterns
+- `detect_fraud_indicators` - Rule-based fraud detection
+- `generate_merchant_intelligence` - Analyze merchant patterns
+- `perform_risk_assessment` - Calculate risk scores
 
-### 2. Card Management (5 tools)
-- **`list_available_cards`** - Enterprise card inventory with security metadata
-- **`get_card_details`** - Secure card information retrieval (PCI DSS compliant)
-- **`create_honeypot_card`** - Dynamic honeypot deployment for fraud detection
-- **`update_card_limits`** - Real-time limit management with approval workflows
-- **`toggle_card_state`** - Secure card activation/deactivation with audit trails
+### Real-Time Intelligence (3 tools)
+- `subscribe_to_alerts` - Set up transaction alerts
+- `get_live_transaction_feed` - Monitor real-time transactions
+- `analyze_spending_patterns` - Analyze behavioral patterns
 
-### 3. Transaction Intelligence (5 tools)
-- **`get_transaction`** - Single transaction deep-dive analysis
-- **`search_transactions`** - Advanced multi-criteria transaction discovery
-- **`get_recent_transactions`** - Real-time transaction monitoring per card
-- **`get_transactions_by_merchant`** - Merchant-specific pattern analysis
-- **`get_transaction_details`** - Comprehensive transaction forensics
+## Fraud Detection
 
-### 4. Pattern Analysis (4 tools)
-- **`analyze_transaction_patterns`** - ML-powered behavioral analysis
-- **`detect_fraud_indicators`** - Real-time fraud scoring with risk classification
-- **`generate_merchant_intelligence`** - Merchant reputation and verification
-- **`perform_risk_assessment`** - Comprehensive entity risk evaluation
+The fraud detection system uses rule-based analysis including:
 
-### 5. Real-Time Intelligence (4 tools)
-- **`subscribe_to_alerts`** - Enterprise alerting with escalation procedures
-- **`get_live_transaction_feed`** - Real-time transaction streaming
-- **`analyze_spending_patterns`** - Behavioral pattern detection
-- **`generate_verification_questions`** - AI-assisted fraud verification
+- Transaction frequency monitoring
+- Declined transaction tracking  
+- Merchant pattern analysis
+- Amount pattern detection
+- Basic risk scoring
 
----
+**Note**: The system includes placeholder ML prediction responses for development purposes, but the actual fraud detection is rule-based.
 
-## 📊 Performance & Monitoring
+## Technology Stack
 
-### Key Performance Indicators (KPIs)
-- **Fraud Detection Rate**: 99.2% accuracy
-- **False Positive Rate**: <0.1%
-- **Mean Time to Detection**: <30 seconds
-- **Mean Time to Response**: <2 minutes
-- **System Availability**: 99.95% uptime
+- **Runtime**: Node.js with ES Modules
+- **Database**: Supabase (PostgreSQL)
+- **Financial API**: Lithic Virtual Card Platform
+- **Protocol**: Model Context Protocol (MCP)
+- **Testing**: Vitest framework
 
-### Monitoring Dashboard
-- **Real-time Metrics**: Transaction volume, response times, error rates
-- **Security Events**: Authentication attempts, authorization failures, suspicious activity
-- **Business Metrics**: Fraud prevention value, investigation efficiency, compliance status
-- **Infrastructure**: CPU, memory, database performance, network latency
+## API Integration
 
-### Alerting Thresholds
-- **Critical**: Response time >500ms, error rate >1%, security breach
-- **Warning**: Response time >200ms, unusual transaction patterns
-- **Info**: Daily reports, maintenance windows, capacity planning
+### MCP Client Example
 
----
-
-## 🔧 Enterprise Integration
-
-### AI Agent Integration
 ```javascript
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-// Enterprise client configuration
-const client = new Client({
-  name: 'enterprise-fraud-detection-agent',
-  version: '1.0.0'
-}, {
-  capabilities: {
-    tools: {},
-    sampling: {},
-    roots: { listChanged: true }
-  }
-});
-
-// Secure transport with authentication
 const transport = new StdioClientTransport({
   command: 'node',
-  args: ['dist/mcp-server.js'],
-  env: {
-    ...process.env,
-    MCP_AUTH_TOKEN: process.env.ENTERPRISE_API_TOKEN
-  }
+  args: ['src/mcp-server.js']
+});
+
+const client = new Client({
+  name: 'fraud-detection-agent',
+  version: '1.0.0'
+}, {
+  capabilities: { tools: {} }
 });
 
 await client.connect(transport);
+const tools = await client.listTools();
 ```
 
-### Enterprise API Examples
+### Health Check
 
-**Health Monitoring:**
 ```javascript
 const health = await client.callTool({
   name: 'health_check',
-  arguments: {
-    includeDetails: true,
-    format: 'enterprise',
-    skipCache: false
-  }
+  arguments: { includeDetails: true }
 });
 ```
 
-**Fraud Investigation:**
-```javascript
-const analysis = await client.callTool({
-  name: 'detect_fraud_indicators',
-  arguments: {
-    cardToken: 'card_enterprise_12345',
-    analysisDepth: 'comprehensive',
-    includeMLScoring: true,
-    riskThreshold: 'enterprise'
-  }
-});
+## Development
+
+### Project Structure
+
+```
+src/
+├── config/           # Configuration and client setup
+├── handlers/         # MCP tool implementations
+├── schemas/          # Tool input/output schemas
+├── services/         # Business logic services
+└── utils/           # Utilities and helpers
+
+tests/
+├── unit/            # Unit tests
+├── integration/     # Integration tests
+├── security/        # Security tests
+└── performance/     # Performance tests
 ```
 
----
+### Testing
 
-## 📚 Documentation & Support
+The project includes comprehensive test coverage:
 
-### Enterprise Documentation
-- **[API Reference](./API_REFERENCE.md)** - Complete tool documentation
-- **[Deployment Guide](./DEPLOYMENT.md)** - Production deployment procedures
-- **[Security Manual](./docs/SECURITY.md)** - Security implementation guide
-- **[Compliance Guide](./docs/COMPLIANCE.md)** - Regulatory compliance procedures
-- **[Operations Manual](./docs/OPERATIONS.md)** - Production operations guide
+- Unit tests for all handlers and services
+- Integration tests for MCP protocol compliance
+- Security tests for authentication and data handling
+- Performance tests for response times
 
-### Support Channels
-- **Enterprise Support**: enterprise-support@your-company.com
-- **Security Issues**: security@your-company.com
-- **Technical Documentation**: docs.your-company.com
-- **Status Page**: status.your-company.com
+## Deployment
 
-### Service Level Agreements
-- **Response Time**: <4 hours for critical issues
-- **Resolution Time**: <24 hours for production issues
-- **Escalation**: Automatic escalation to senior engineers
-- **Communication**: Regular updates every 2 hours during incidents
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 
----
+The application can be deployed on:
+- Railway (recommended, with included `railway.json`)
+- Docker containers
+- Traditional servers
 
-## 📝 License & Legal
+## License
 
-This software is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
-
-**Enterprise Licensing**: For enterprise licensing, support agreements, and SLA guarantees, contact enterprise-sales@your-company.com.
-
-**Compliance Certifications**: SOC 2 Type II, PCI DSS Level 1, ISO 27001.
-
----
-
-*Last Updated: December 2024 | Version: 1.0.0 | Enterprise Grade* 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
