@@ -430,14 +430,27 @@ async function main() {
                 headersSent: false,
                 statusCode: 200,
                 _headers: {},
+                locals: {},
                 setHeader: function(name, value) {
                   this._headers[name] = value;
+                  return this;
+                },
+                getHeader: function(name) {
+                  return this._headers[name];
+                },
+                getHeaders: function() {
+                  return { ...this._headers };
+                },
+                removeHeader: function(name) {
+                  delete this._headers[name];
+                  return this;
                 },
                 writeHead: function(statusCode, headers) {
                   this.statusCode = statusCode;
                   if (headers) {
                     Object.assign(this._headers, headers);
                   }
+                  return this;
                 },
                 write: function(data) {
                   // Send the MCP response through SSE
@@ -453,13 +466,35 @@ async function main() {
                   } catch (error) {
                     logger.error('Error sending SSE response:', error);
                   }
+                  return this;
                 },
                 end: function(data) {
                   if (data) {
                     this.write(data);
                   }
                   this.headersSent = true;
-                }
+                  return this;
+                },
+                status: function(code) {
+                  this.statusCode = code;
+                  return this;
+                },
+                json: function(obj) {
+                  this.setHeader('Content-Type', 'application/json');
+                  return this.end(JSON.stringify(obj));
+                },
+                send: function(data) {
+                  return this.end(data);
+                },
+                sendStatus: function(code) {
+                  this.statusCode = code;
+                  return this.end();
+                },
+                // Add event emitter methods that might be expected
+                on: function() { return this; },
+                emit: function() { return this; },
+                once: function() { return this; },
+                removeListener: function() { return this; }
               };
               
               // Create transport and handle request using mock response
@@ -471,18 +506,29 @@ async function main() {
               const server = createMcpServer();
               await server.connect(transport);
               
-              logger.info('About to call transport.handleRequest with SSE response handler');
-              await transport.handleRequest(req, mockRes, req.body);
-              
-              // Send success response to the POST request
-              res.status(200).json({ success: true });
-              
-              logger.info('SSE transport.handleRequest completed successfully', {
-                method: req.body?.method,
-                requestId: req.body?.id
-              });
-              
-              return;
+              try {
+                logger.info('About to call transport.handleRequest with SSE response handler');
+                await transport.handleRequest(req, mockRes, req.body);
+                
+                // Send success response to the POST request
+                res.status(200).json({ success: true });
+                
+                logger.info('SSE transport.handleRequest completed successfully', {
+                  method: req.body?.method,
+                  requestId: req.body?.id
+                });
+                
+                return;
+              } catch (sseError) {
+                logger.error('Error in SSE transport handling:', {
+                  error: sseError.message,
+                  stack: sseError.stack,
+                  method: req.body?.method,
+                  requestId: req.body?.id,
+                  sessionId: sseSessionId.substring(0, 8) + '...'
+                });
+                // Fall through to normal handling if SSE fails
+              }
             } else {
               logger.warn('No active SSE connection found for SSE client POST request');
               // Fall through to normal handling
