@@ -116,11 +116,10 @@ export async function handleGetCardDetails(args, requestId) {
     }
     
     // Call existing service function - ZERO business logic changes
-    const result = await cardService.getCardDetailsForMcp({
-      cardToken: cardToken,
+    const result = await cardService.getCardDetailsForMcp(cardToken, requestId, {
       includePan: includePan,
       reason: reason
-    }, requestId);
+    });
     
     // Format for MCP response (PAN already handled by service)
     const response = {
@@ -235,21 +234,41 @@ export async function handleUpdateCardLimits(args, requestId) {
       args: sanitizeArgs(args) 
     }, 'MCP tool: update_card_limits called');
     
-    // Validate required parameters
-    if (!args?.cardToken) {
-      throw new Error('Card token is required and must be a string');
+    // Enhanced parameter extraction to handle both flat and nested structures
+    let cardToken, spendLimit, spendLimitDuration, singleUseLimit;
+    
+    if (args?.cardToken) {
+      // Handle nested structure: { cardToken: { cardToken: "uuid", spendLimit: 1000, ... } }
+      if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
+        cardToken = args.cardToken.cardToken;
+        spendLimit = args.cardToken.spendLimit || args.spendLimit;
+        spendLimitDuration = args.cardToken.spendLimitDuration || args.spendLimitDuration;
+        singleUseLimit = args.cardToken.singleUseLimit || args.singleUseLimit;
+      } 
+      // Handle flat structure: { cardToken: "uuid", spendLimit: 1000, ... }
+      else if (typeof args.cardToken === 'string') {
+        cardToken = args.cardToken;
+        spendLimit = args.spendLimit;
+        spendLimitDuration = args.spendLimitDuration;
+        singleUseLimit = args.singleUseLimit;
+      } else {
+        throw new Error('cardToken must be a string or object with cardToken property');
+      }
+    } else {
+      throw new Error('cardToken is required');
     }
     
-    if (typeof args.cardToken !== 'string') {
+    // Validate that we have a valid string cardToken
+    if (!cardToken || typeof cardToken !== 'string') {
       throw new Error('Card token is required and must be a string');
     }
     
     // Prepare parameters for service call
     const params = {
-      cardToken: args.cardToken,
-      spendLimit: args?.spendLimit,
-      spendLimitDuration: args?.spendLimitDuration,
-      singleUseLimit: args?.singleUseLimit
+      cardToken: cardToken,
+      spendLimit: spendLimit,
+      spendLimitDuration: spendLimitDuration,
+      singleUseLimit: singleUseLimit
     };
     
     // Call existing service function - ZERO business logic changes
@@ -262,7 +281,7 @@ export async function handleUpdateCardLimits(args, requestId) {
           type: "text",
           text: JSON.stringify({
             success: true,
-            cardToken: maskCardToken(args.cardToken),
+            cardToken: maskCardToken(cardToken),
             updatedLimits: result,
             timestamp: new Date().toISOString(),
             requestId
@@ -273,7 +292,7 @@ export async function handleUpdateCardLimits(args, requestId) {
     
     logger.info({ 
       requestId, 
-      cardToken: maskCardToken(args.cardToken),
+      cardToken: maskCardToken(cardToken),
       responseTime: Date.now() - extractTimestamp(requestId)
     }, 'MCP tool: update_card_limits completed successfully');
     
@@ -282,7 +301,7 @@ export async function handleUpdateCardLimits(args, requestId) {
   } catch (error) {
     logger.error({ 
       requestId, 
-      cardToken: args?.cardToken ? maskCardToken(args.cardToken) : 'not_provided',
+      cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskCardToken(args.cardToken) : 'nested_object') : 'not_provided',
       error: error.message 
     }, 'MCP tool error: update_card_limits');
     
