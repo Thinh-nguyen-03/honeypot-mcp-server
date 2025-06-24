@@ -40,8 +40,8 @@ export const getCardDetailsSchema = {
     properties: {
       cardToken: {
         type: "string",
-        description: "Lithic card token",
-        pattern: "^card_[a-zA-Z0-9]+$"
+        description: "Lithic card token (UUID format)",
+        pattern: "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
       },
       includePan: {
         type: "boolean",
@@ -103,8 +103,8 @@ export const updateCardLimitsSchema = {
     properties: {
       cardToken: {
         type: "string",
-        description: "Lithic card token",
-        pattern: "^card_[a-zA-Z0-9]+$"
+        description: "Lithic card token (UUID format)",
+        pattern: "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
       },
       spendLimit: {
         type: "number",
@@ -128,8 +128,8 @@ export const toggleCardStateSchema = {
     properties: {
       cardToken: {
         type: "string",
-        description: "Lithic card token",
-        pattern: "^card_[a-zA-Z0-9]+$"
+        description: "Lithic card token (UUID format)",
+        pattern: "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
       },
       state: {
         type: "string",

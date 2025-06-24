@@ -238,14 +238,14 @@ export async function handleUpdateCardLimits(args, requestId) {
     let cardToken, spendLimit, spendLimitDuration, singleUseLimit;
     
     if (args?.cardToken) {
-      // Handle nested structure: { cardToken: { cardToken: "uuid", spendLimit: 1000, ... } }
+      // Handle nested structure: { cardToken: { cardToken: "uuid", spendLimit: 100, spendLimitDuration: "MONTHLY" } }
       if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
         cardToken = args.cardToken.cardToken;
         spendLimit = args.cardToken.spendLimit || args.spendLimit;
         spendLimitDuration = args.cardToken.spendLimitDuration || args.spendLimitDuration;
         singleUseLimit = args.cardToken.singleUseLimit || args.singleUseLimit;
       } 
-      // Handle flat structure: { cardToken: "uuid", spendLimit: 1000, ... }
+      // Handle flat structure: { cardToken: "uuid", spendLimit: 100, spendLimitDuration: "MONTHLY" }
       else if (typeof args.cardToken === 'string') {
         cardToken = args.cardToken;
         spendLimit = args.spendLimit;
@@ -272,7 +272,11 @@ export async function handleUpdateCardLimits(args, requestId) {
     };
     
     // Call existing service function - ZERO business logic changes
-    const result = await cardService.updateCardLimit(params, requestId);
+    const result = await cardService.updateCardLimit(
+      cardToken, 
+      spendLimit, 
+      spendLimitDuration
+    );
     
     // Format for MCP response
     const response = {
@@ -302,7 +306,8 @@ export async function handleUpdateCardLimits(args, requestId) {
     logger.error({ 
       requestId, 
       cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskCardToken(args.cardToken) : 'nested_object') : 'not_provided',
-      error: error.message 
+      error: error.message,
+      stack: error.stack
     }, 'MCP tool error: update_card_limits');
     
     throw formatMcpError(error, 'update_card_limits', requestId);
@@ -318,20 +323,46 @@ export async function handleToggleCardState(args, requestId) {
   try {
     logger.info({ 
       requestId, 
-      args: sanitizeArgs(args),
-      cardToken: maskCardToken(args?.cardToken)
+      args: sanitizeArgs(args)
     }, 'MCP tool: toggle_card_state called');
     
-    // Validate required parameters
-    if (!args?.cardToken || !args?.state) {
-      throw new Error('cardToken and state are required');
+    // Enhanced parameter extraction to handle both flat and nested structures
+    let cardToken, state, reason;
+    
+    if (args?.cardToken) {
+      // Handle nested structure: { cardToken: { cardToken: "uuid", state: "ACTIVE", reason: "testing" } }
+      if (typeof args.cardToken === 'object' && args.cardToken.cardToken) {
+        cardToken = args.cardToken.cardToken;
+        state = args.cardToken.state || args.state;
+        reason = args.cardToken.reason || args.reason;
+      } 
+      // Handle flat structure: { cardToken: "uuid", state: "ACTIVE", reason: "testing" }
+      else if (typeof args.cardToken === 'string') {
+        cardToken = args.cardToken;
+        state = args.state;
+        reason = args.reason;
+      } else {
+        throw new Error('cardToken must be a string or object with cardToken property');
+      }
+    } else {
+      throw new Error('cardToken is required');
+    }
+    
+    // Validate that we have a valid string cardToken
+    if (!cardToken || typeof cardToken !== 'string') {
+      throw new Error('Card token is required and must be a string');
+    }
+    
+    // Validate state is provided
+    if (!state) {
+      throw new Error('state is required');
     }
     
     // Call existing service function - ZERO business logic changes
     const result = await cardService.toggleCardState({
-      cardToken: args.cardToken,
-      state: args.state,
-      reason: args.reason
+      cardToken: cardToken,
+      state: state,
+      reason: reason
     }, requestId);
     
     // Format for MCP response
@@ -341,8 +372,8 @@ export async function handleToggleCardState(args, requestId) {
           type: "text",
           text: JSON.stringify({
             success: true,
-            cardToken: args.cardToken,
-            newState: args.state,
+            cardToken: cardToken,
+            newState: state,
             result: result,
             timestamp: new Date().toISOString(),
             requestId
@@ -353,8 +384,8 @@ export async function handleToggleCardState(args, requestId) {
     
     logger.info({ 
       requestId, 
-      cardToken: maskCardToken(args.cardToken),
-      newState: args.state,
+      cardToken: maskCardToken(cardToken),
+      newState: state,
       responseTime: Date.now() - extractTimestamp(requestId)
     }, 'MCP tool: toggle_card_state completed successfully');
     
@@ -363,7 +394,7 @@ export async function handleToggleCardState(args, requestId) {
   } catch (error) {
     logger.error({ 
       requestId, 
-      cardToken: args?.cardToken ? maskCardToken(args.cardToken) : 'not_provided',
+      cardTokenInfo: args?.cardToken ? (typeof args.cardToken === 'string' ? maskCardToken(args.cardToken) : 'nested_object') : 'not_provided',
       error: error.message 
     }, 'MCP tool error: toggle_card_state');
     

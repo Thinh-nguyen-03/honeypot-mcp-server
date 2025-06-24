@@ -192,12 +192,15 @@ export async function handleGenerateMerchantIntelligence(args, requestId) {
     
     // Use transaction search to gather merchant data
     const merchantQuery = args.merchantDescriptor || args.merchantId;
-    const merchantTransactions = await reportingService.processTransactionSearchQuery(
+    const searchResult = await reportingService.processTransactionSearchQuery(
       `merchant: ${merchantQuery}`, 
       100, 
       null, 
       requestId
     );
+    
+    // Extract the transactions array from the search result
+    const merchantTransactions = searchResult.transactions || [];
     
     // Generate intelligence report
     const intelligence = {
@@ -541,7 +544,7 @@ function generateFraudRecommendations(transactions) {
 }
 
 function calculateAverageAmount(transactions) {
-  if (!transactions || transactions.length === 0) return 0;
+  if (!transactions || !Array.isArray(transactions) || transactions.length === 0) return 0;
   
   const total = transactions.reduce((sum, t) => {
     const amount = parseFloat(t.amount?.split(' ')[1] || '0');
@@ -552,6 +555,8 @@ function calculateAverageAmount(transactions) {
 }
 
 function extractCommonLocations(transactions) {
+  if (!transactions || !Array.isArray(transactions)) return [];
+  
   const locations = transactions.map(t => t.location).filter(Boolean);
   const locationCounts = {};
   
@@ -566,11 +571,15 @@ function extractCommonLocations(transactions) {
 }
 
 function extractMccCodes(transactions) {
+  if (!transactions || !Array.isArray(transactions)) return [];
+  
   const codes = transactions.map(t => t.merchant_mcc).filter(Boolean);
   return [...new Set(codes)];
 }
 
 function calculateMerchantRiskScore(transactions) {
+  if (!transactions || !Array.isArray(transactions)) return 25;
+  
   let score = 25; // baseline for merchants
   
   const declinedCount = transactions.filter(t => !t.is_approved).length;
@@ -580,6 +589,8 @@ function calculateMerchantRiskScore(transactions) {
 }
 
 function identifyMerchantRiskFactors(transactions) {
+  if (!transactions || !Array.isArray(transactions)) return [];
+  
   const factors = [];
   
   const declinedCount = transactions.filter(t => !t.is_approved).length;
@@ -595,6 +606,16 @@ function identifyMerchantRiskFactors(transactions) {
 }
 
 function generateMerchantRecommendations(transactions) {
+  if (!transactions || !Array.isArray(transactions)) {
+    return [
+      {
+        action: 'data_collection',
+        priority: 'high',
+        description: 'Collect transaction data for proper analysis'
+      }
+    ];
+  }
+  
   return [
     {
       action: 'monitor_transactions',
