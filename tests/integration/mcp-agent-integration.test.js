@@ -82,11 +82,11 @@ describe('MCP Agent Integration Tests', () => {
       expect(mcpClient.getServerCapabilities().tools).toBeDefined();
     });
 
-    test('should list all 18 MCP tools correctly', async () => {
+    test('should list all 13 MCP tools correctly', async () => {
       const result = await mcpClient.listTools();
 
-      // Verify all 18 tools are present
-      expect(result.tools).toHaveLength(18);
+      // Verify all 13 tools are present
+      expect(result.tools).toHaveLength(13);
 
       // Verify tool categories are present
       const toolNames = result.tools.map(tool => tool.name);
@@ -108,17 +108,9 @@ describe('MCP Agent Integration Tests', () => {
       expect(toolNames).toContain('get_transactions_by_merchant');
       expect(toolNames).toContain('get_transaction_details');
       
-      // Pattern Analysis (4 tools)
-      expect(toolNames).toContain('analyze_transaction_patterns');
-      expect(toolNames).toContain('detect_fraud_indicators');
-      expect(toolNames).toContain('generate_merchant_intelligence');
-      expect(toolNames).toContain('perform_risk_assessment');
-      
-      // Real-time Intelligence (4 tools)
+      // Real-time Intelligence (2 tools)
       expect(toolNames).toContain('subscribe_to_alerts');
       expect(toolNames).toContain('get_live_transaction_feed');
-      expect(toolNames).toContain('analyze_spending_patterns');
-      expect(toolNames).toContain('generate_verification_questions');
     });
 
     test('should have properly formatted tool schemas', async () => {
@@ -135,7 +127,7 @@ describe('MCP Agent Integration Tests', () => {
         expect(tool.inputSchema).toHaveProperty('properties');
         
         // Verify security metadata is present for critical tools
-        if (['get_card_details', 'create_honeypot_card', 'detect_fraud_indicators'].includes(tool.name)) {
+        if (['get_card_details', 'create_honeypot_card'].includes(tool.name)) {
           expect(tool.description).toContain('security');
         }
       });
@@ -168,39 +160,21 @@ describe('MCP Agent Integration Tests', () => {
       expect(cardsData).toHaveProperty('cardCount');
       expect(cardsData).toHaveProperty('cards');
       
-      // Step 3: Analyze transaction patterns for fraud detection
-      const patternResult = await mcpClient.callTool({
-        name: 'analyze_transaction_patterns',
+      // Step 3: Subscribe to real-time alerts for fraud detection
+      const alertResult = await mcpClient.callTool({
+        name: 'subscribe_to_alerts',
         arguments: {
-          cardToken: 'card_test_fraud_investigation',
-          analysisWindow: '7d',
-          patternTypes: ['temporal', 'merchant', 'amount'],
-          includeAnomalies: true,
-          confidenceThreshold: 0.8
+          cardTokens: ['card_test_fraud_investigation'],
+          alertTypes: ['fraud_detected', 'high_risk_transaction'],
+          riskThreshold: 0.8,
+          subscriptionDuration: '1h'
         }
       });
       
-      const patternData = JSON.parse(patternResult.content[0].text);
-      expect(patternData).toHaveProperty('patternAnalysis');
-      expect(patternData.patternAnalysis).toHaveProperty('patterns');
-      expect(patternData.patternAnalysis).toHaveProperty('riskScore');
-      
-      // Step 4: Generate verification questions based on patterns
-      const questionsResult = await mcpClient.callTool({
-        name: 'generate_verification_questions',
-        arguments: {
-          cardToken: 'card_test_fraud_investigation',
-          questionType: 'mixed',
-          difficultyLevel: 'medium',
-          questionCount: 5,
-          adaptToScammerTactics: true
-        }
-      });
-      
-      const questionsData = JSON.parse(questionsResult.content[0].text);
-      expect(questionsData).toHaveProperty('verificationQuestions');
-      expect(questionsData.verificationQuestions.questionSet).toHaveProperty('questions');
-      expect(questionsData.verificationQuestions.questionSet.questions.length).toBeGreaterThan(0);
+             const alertData = JSON.parse(alertResult.content[0].text);
+       expect(alertData).toHaveProperty('alertSubscription');
+       expect(alertData.alertSubscription).toHaveProperty('subscriptionId');
+              expect(alertData.alertSubscription).toHaveProperty('status');
     });
 
     test('AI Agent Scenario: Real-time Monitoring Setup', async () => {
@@ -239,74 +213,10 @@ describe('MCP Agent Integration Tests', () => {
       expect(feedData.liveTransactionFeed).toHaveProperty('feedId');
       expect(feedData.liveTransactionFeed.status).toBe('active');
       
-      // Step 3: Analyze current spending patterns
-      const spendingResult = await mcpClient.callTool({
-        name: 'analyze_spending_patterns',
-        arguments: {
-          cardToken: 'card_monitor_1',
-          analysisType: 'realtime',
-          timeWindow: '24h',
-          realTimeMode: true,
-          includePredictions: true
-        }
-      });
-      
-      const spendingData = JSON.parse(spendingResult.content[0].text);
-      expect(spendingData).toHaveProperty('spendingPatternAnalysis');
-      expect(spendingData.spendingPatternAnalysis).toHaveProperty('patterns');
+
     });
 
-    test('AI Agent Scenario: Merchant Risk Assessment', async () => {
-      // Simulates comprehensive merchant risk analysis workflow
-      
-      // Step 1: Generate merchant intelligence
-      const merchantResult = await mcpClient.callTool({
-        name: 'generate_merchant_intelligence',
-        arguments: {
-          merchantDescriptor: 'SUSPICIOUS_ONLINE_SHOP',
-          analysisType: 'comprehensive',
-          timeframe: '30d',
-          includeIndustryData: true,
-          includeRiskFactors: true,
-          includeGeographic: true
-        }
-      });
-      
-      const merchantData = JSON.parse(merchantResult.content[0].text);
-      expect(merchantData).toHaveProperty('merchantIntelligence');
-      expect(merchantData.merchantIntelligence).toHaveProperty('merchantProfile');
-      
-      // Step 2: Search transactions with this merchant
-      const transactionResult = await mcpClient.callTool({
-        name: 'get_transactions_by_merchant',
-        arguments: {
-          merchantDescriptor: 'SUSPICIOUS_ONLINE_SHOP',
-          timeframe: '30d',
-          includeAnalytics: true,
-          limit: 50
-        }
-      });
-      
-      const transactionData = JSON.parse(transactionResult.content[0].text);
-      expect(transactionData).toHaveProperty('merchantTransactions');
-      expect(transactionData.merchantTransactions).toHaveProperty('transactions');
-      
-      // Step 3: Detect fraud indicators across merchant transactions
-      const fraudResult = await mcpClient.callTool({
-        name: 'detect_fraud_indicators',
-        arguments: {
-          cardToken: 'card_merchant_analysis',
-          analysisDepth: 'comprehensive',
-          riskThreshold: 0.7,
-          includeMLModels: true
-        }
-      });
-      
-      const fraudData = JSON.parse(fraudResult.content[0].text);
-      expect(fraudData).toHaveProperty('fraudAnalysis');
-      expect(fraudData.fraudAnalysis).toHaveProperty('riskScore');
-      expect(fraudData.fraudAnalysis).toHaveProperty('indicators');
-    });
+
   });
 
   describe('Performance Integration Tests', () => {
@@ -316,7 +226,7 @@ describe('MCP Agent Integration Tests', () => {
         { name: 'list_available_cards', args: { limit: 5 } },
         { name: 'get_card_details', args: { cardToken: 'card_perf_test' } },
         { name: 'search_transactions', args: { limit: 10 } },
-        { name: 'analyze_transaction_patterns', args: { cardToken: 'card_perf_test' } }
+        { name: 'get_recent_transactions', args: { cardToken: 'card_perf_test', limit: 5 } }
       ];
 
       for (const tool of tools) {
@@ -462,7 +372,7 @@ describe('MCP Agent Integration Tests', () => {
       // Test XSS attempts
       await expect(
         mcpClient.callTool({
-          name: 'generate_verification_questions',
+          name: 'get_card_details',
           arguments: {
             cardToken: '<script>alert("xss")</script>'
           }
@@ -508,27 +418,23 @@ describe('MCP Agent Integration Tests', () => {
     test('should handle complex data transformations correctly', async () => {
       // Test that complex data flows through the MCP protocol correctly
       const result = await mcpClient.callTool({
-        name: 'perform_risk_assessment',
+        name: 'search_transactions',
         arguments: {
-          entityType: 'transaction',
-          entityId: 'txn_complex_data_test',
-          assessmentType: 'fraud',
-          riskFactors: ['velocity', 'amount_deviation', 'merchant_risk'],
-          includeRecommendations: true,
-          includePredictions: true
+          limit: 10,
+          includeAnalytics: true,
+          includeMetadata: true,
+          orderBy: 'timestamp',
+          sortDirection: 'desc'
         }
       });
 
-      const assessmentData = JSON.parse(result.content[0].text);
-      expect(assessmentData).toHaveProperty('riskAssessment');
-      expect(assessmentData.riskAssessment).toHaveProperty('entity');
-      expect(assessmentData.riskAssessment).toHaveProperty('riskFactors');
-      expect(assessmentData.riskAssessment).toHaveProperty('recommendations');
-      expect(assessmentData.riskAssessment).toHaveProperty('predictions');
+      const transactionData = JSON.parse(result.content[0].text);
+      expect(transactionData).toHaveProperty('transactionSearch');
+      expect(transactionData.transactionSearch).toHaveProperty('transactions');
+      expect(transactionData.transactionSearch).toHaveProperty('totalCount');
       
       // Verify complex nested data structures are preserved
-      expect(Array.isArray(assessmentData.riskAssessment.riskFactors)).toBe(true);
-      expect(Array.isArray(assessmentData.riskAssessment.recommendations)).toBe(true);
+      expect(Array.isArray(transactionData.transactionSearch.transactions)).toBe(true);
     });
   });
 
@@ -547,11 +453,11 @@ describe('MCP Agent Integration Tests', () => {
           arguments: { requestId, limit: 5 }
         }),
         mcpClient.callTool({
-          name: 'analyze_transaction_patterns',
+          name: 'get_recent_transactions',
           arguments: { 
             requestId,
             cardToken: 'card_context_test',
-            analysisWindow: '1d'
+            limit: 10
           }
         })
       ]);

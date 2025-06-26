@@ -9,10 +9,10 @@ The Honeypot MCP Server is a transaction monitoring system built on the Model Co
 
 ## Features
 
-- **18 MCP Tools**: Comprehensive set of tools for transaction monitoring and fraud investigation
-- **Transaction Analysis**: Rule-based pattern detection and fraud indicators
+- **13 MCP Tools**: Comprehensive set of tools for transaction monitoring and card management
+- **Transaction Intelligence**: Advanced transaction search and analysis capabilities
 - **Card Management**: Create and manage honeypot cards via Lithic API
-- **Real-time Monitoring**: Health checks and transaction monitoring capabilities
+- **Real-time Monitoring**: Live transaction feeds and alert subscriptions
 - **MCP Protocol**: Native support for Model Context Protocol with HTTP and Stdio transports
 
 ## Quick Start
@@ -80,7 +80,7 @@ curl http://localhost:3000/health
 
 ## MCP Tools
 
-The server provides 18 tools organized by category:
+The server provides 13 tools organized by category:
 
 ### System Operations (1 tool)
 - `health_check` - System health monitoring
@@ -99,28 +99,21 @@ The server provides 18 tools organized by category:
 - `get_transactions_by_merchant` - Get transactions by merchant
 - `get_transaction_details` - Get comprehensive transaction information
 
-### Pattern Analysis (4 tools)
-- `analyze_transaction_patterns` - Analyze spending patterns
-- `detect_fraud_indicators` - Rule-based fraud detection
-- `generate_merchant_intelligence` - Analyze merchant patterns
-- `perform_risk_assessment` - Calculate risk scores
-
-### Real-Time Intelligence (3 tools)
+### Real-Time Intelligence (2 tools)
 - `subscribe_to_alerts` - Set up transaction alerts
 - `get_live_transaction_feed` - Monitor real-time transactions
-- `analyze_spending_patterns` - Analyze behavioral patterns
 
-## Fraud Detection
+## Transaction Intelligence
 
-The fraud detection system uses rule-based analysis including:
+The system provides comprehensive transaction monitoring and analysis including:
 
-- Transaction frequency monitoring
-- Declined transaction tracking  
-- Merchant pattern analysis
-- Amount pattern detection
-- Basic risk scoring
+- Advanced transaction search and filtering
+- Real-time transaction monitoring
+- Merchant-specific transaction analysis
+- Card-based transaction tracking
+- Live transaction feed capabilities
 
-**Note**: The system includes placeholder ML prediction responses for development purposes, but the actual fraud detection is rule-based.
+**Core Focus**: Streamlined transaction intelligence for monitoring and investigation workflows.
 
 ## Technology Stack
 

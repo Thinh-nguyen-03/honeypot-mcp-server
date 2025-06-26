@@ -125,87 +125,11 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       });
     });
 
-    test('should sanitize card token in spending pattern analysis', async () => {
-      const argsWithSensitiveData = {
-        cardToken: 'card_spending_analysis_123',
-        analysisType: 'comprehensive',
-        realTimeMode: true
-      };
 
-      reportingService.analyzeSpendingPatterns = vi.fn().mockResolvedValue({
-        patterns: [{ type: 'daily_spend', value: 150 }],
-        deviations: [],
-        baseline: { averageDaily: 120 },
-        riskIndicators: [],
-        summary: 'Normal spending pattern'
-      });
-
-      await realtimeHandlers.handleAnalyzeSpendingPatterns(argsWithSensitiveData, mockRequestId);
-
-      // Verify card token is masked in logs
-      const loggerCalls = logger.info.mock.calls;
-      loggerCalls.forEach(call => {
-        const loggedArgs = call[0];
-        if (loggedArgs.cardToken) {
-          expect(loggedArgs.cardToken).toBe('card_spe***');
-        }
-      });
-    });
-
-    test('should sanitize card token in verification question generation', async () => {
-      const argsWithSensitiveData = {
-        cardToken: 'card_verification_secure_456',
-        questionType: 'mixed',
-        adaptToScammerTactics: true
-      };
-
-      reportingService.generateQuestions = vi.fn().mockResolvedValue({
-        questions: [
-          { question: 'What was your last transaction amount?', type: 'amount' },
-          { question: 'Which merchant did you shop at yesterday?', type: 'merchant' }
-        ],
-        transactionHistoryAnalyzed: 30,
-        patternsUsed: ['recent_transactions', 'merchant_preferences'],
-        scammerAdaptations: ['avoid_obvious_answers'],
-        usageInstructions: 'Ask questions in random order',
-        effectiveness: { confidence: 0.9 }
-      });
-
-      await realtimeHandlers.handleGenerateVerificationQuestions(argsWithSensitiveData, mockRequestId);
-
-      // Verify card token is masked in logs
-      const loggerCalls = logger.info.mock.calls;
-      loggerCalls.forEach(call => {
-        const loggedArgs = call[0];
-        if (loggedArgs.cardToken) {
-          expect(loggedArgs.cardToken).toBe('card_ver***');
-        }
-      });
-    });
   });
 
   describe('Input Validation Tests', () => {
-    test('handleAnalyzeSpendingPatterns - validates required cardToken', async () => {
-      const argsWithoutCard = {
-        analysisType: 'comprehensive',
-        timeWindow: '24h'
-      };
 
-      await expect(
-        realtimeHandlers.handleAnalyzeSpendingPatterns(argsWithoutCard, mockRequestId)
-      ).rejects.toThrow(/cardToken.*required/i);
-    });
-
-    test('handleGenerateVerificationQuestions - validates required cardToken', async () => {
-      const argsWithoutCard = {
-        questionType: 'mixed',
-        questionCount: 5
-      };
-
-      await expect(
-        realtimeHandlers.handleGenerateVerificationQuestions(argsWithoutCard, mockRequestId)
-      ).rejects.toThrow(/cardToken.*required/i);
-    });
 
     test('handleSubscribeToAlerts - enforces maximum alerts per minute', async () => {
       const argsWithHighLimit = {
@@ -256,30 +180,7 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       );
     });
 
-    test('handleGenerateVerificationQuestions - enforces maximum question count', async () => {
-      const argsWithHighCount = {
-        cardToken: 'card_123',
-        questionCount: 25 // Over maximum of 10
-      };
 
-      reportingService.generateQuestions = vi.fn().mockResolvedValue({
-        questions: Array.from({ length: 10 }, (_, i) => ({ question: `Q${i}`, type: 'test' })),
-        transactionHistoryAnalyzed: 30,
-        patternsUsed: [],
-        usageInstructions: 'Test',
-        effectiveness: { confidence: 0.8 }
-      });
-
-      await realtimeHandlers.handleGenerateVerificationQuestions(argsWithHighCount, mockRequestId);
-
-      // Verify count was capped at 10
-      expect(reportingService.generateQuestions).toHaveBeenCalledWith(
-        expect.objectContaining({
-          questionCount: 10
-        }),
-        mockRequestId
-      );
-    });
   });
 
   describe('Business Logic Tests', () => {
@@ -363,108 +264,7 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       expect(parsedResponse.liveTransactionFeed.cardTokenFilter).toEqual(['card_123***', 'card_678***']);
     });
 
-    test('handleAnalyzeSpendingPatterns - handles real-time mode correctly', async () => {
-      const args = {
-        cardToken: 'card_realtime_test',
-        analysisType: 'realtime',
-        timeWindow: '2h',
-        deviationThreshold: 0.5,
-        realTimeMode: true,
-        includePredictions: true
-      };
 
-      const mockAnalysis = {
-        patterns: [
-          { type: 'hourly_spend', value: 75, trend: 'increasing' },
-          { type: 'merchant_frequency', value: 3, trend: 'normal' }
-        ],
-        deviations: [
-          { type: 'amount_spike', severity: 'medium', timestamp: new Date().toISOString() }
-        ],
-        baseline: { averageHourly: 50, standardDeviation: 15 },
-        predictions: { nextHour: 85, confidence: 0.8 },
-        riskIndicators: ['unusual_velocity'],
-        summary: 'Elevated spending detected with medium risk',
-        realTimeStatus: { active: true, updateFrequency: '5m' }
-      };
-
-      reportingService.analyzeSpendingPatterns = vi.fn().mockResolvedValue(mockAnalysis);
-
-      const result = await realtimeHandlers.handleAnalyzeSpendingPatterns(args, mockRequestId);
-
-      // Verify service called correctly
-      expect(reportingService.analyzeSpendingPatterns).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cardToken: 'card_realtime_test',
-          analysisType: 'realtime',
-          timeWindow: '2h',
-          includeBaseline: true,
-          deviationThreshold: 0.5,
-          includePredictions: true,
-          realTimeMode: true
-        }),
-        mockRequestId
-      );
-
-      // Verify response includes real-time data
-      const parsedResponse = JSON.parse(result.content[0].text);
-      expect(parsedResponse.spendingPatternAnalysis.patterns).toEqual(mockAnalysis.patterns);
-      expect(parsedResponse.spendingPatternAnalysis.realTimeMonitoring).toEqual(mockAnalysis.realTimeStatus);
-      expect(parsedResponse.spendingPatternAnalysis.predictions).toEqual(mockAnalysis.predictions);
-    });
-
-    test('handleGenerateVerificationQuestions - creates contextual questions', async () => {
-      const args = {
-        cardToken: 'card_verification_context',
-        questionType: 'contextual',
-        difficultyLevel: 'hard',
-        questionCount: 7,
-        timeframe: '14d',
-        includeDecoys: true,
-        contextualHints: true,
-        adaptToScammerTactics: true
-      };
-
-      const mockQuestions = {
-        questions: [
-          { question: 'What was the exact amount of your Amazon purchase last Tuesday?', type: 'amount', difficulty: 'hard' },
-          { question: 'Which gas station did you visit on December 15th?', type: 'merchant', difficulty: 'hard' },
-          { question: 'How many transactions did you make at coffee shops this week?', type: 'frequency', difficulty: 'medium' },
-          { question: 'What time of day do you typically make online purchases?', type: 'pattern', difficulty: 'medium' },
-          { question: 'Did you make a purchase for exactly $67.43 recently?', type: 'decoy', difficulty: 'easy' }
-        ],
-        transactionHistoryAnalyzed: 45,
-        patternsUsed: ['merchant_preferences', 'timing_patterns', 'amount_patterns'],
-        scammerAdaptations: ['avoid_round_amounts', 'focus_on_specifics', 'include_timing'],
-        usageInstructions: 'Ask questions in conversational tone, mix difficulty levels',
-        effectiveness: { confidence: 0.92, expectedAccuracy: 0.85 }
-      };
-
-      reportingService.generateQuestions = vi.fn().mockResolvedValue(mockQuestions);
-
-      const result = await realtimeHandlers.handleGenerateVerificationQuestions(args, mockRequestId);
-
-      // Verify service called correctly
-      expect(reportingService.generateQuestions).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cardToken: 'card_verification_context',
-          questionType: 'contextual',
-          difficultyLevel: 'hard',
-          questionCount: 7,
-          timeframe: '14d',
-          includeDecoys: true,
-          contextualHints: true,
-          adaptToScammerTactics: true
-        }),
-        mockRequestId
-      );
-
-      // Verify response structure
-      const parsedResponse = JSON.parse(result.content[0].text);
-      expect(parsedResponse.verificationQuestions.questionSet.questions).toHaveLength(5);
-      expect(parsedResponse.verificationQuestions.generationContext.adaptations).toEqual(mockQuestions.scammerAdaptations);
-      expect(parsedResponse.verificationQuestions.effectiveness.confidence).toBe(0.92);
-    });
   });
 
   describe('Error Handling Tests', () => {
@@ -508,45 +308,7 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       );
     });
 
-    test('handles spending pattern analysis errors', async () => {
-      const args = { cardToken: 'card_analysis_error' };
-      const analysisError = new Error('Pattern analysis engine timeout');
 
-      reportingService.analyzeSpendingPatterns = vi.fn().mockRejectedValue(analysisError);
-
-      await expect(
-        realtimeHandlers.handleAnalyzeSpendingPatterns(args, mockRequestId)
-      ).rejects.toThrow("Tool 'analyze_spending_patterns' failed: Pattern analysis engine timeout");
-
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestId: mockRequestId,
-          cardToken: 'card_ana***',
-          error: 'Pattern analysis engine timeout'
-        }),
-        'MCP tool error: analyze_spending_patterns'
-      );
-    });
-
-    test('handles verification question generation errors', async () => {
-      const args = { cardToken: 'card_question_error' };
-      const questionError = new Error('Insufficient transaction history');
-
-      reportingService.generateQuestions = vi.fn().mockRejectedValue(questionError);
-
-      await expect(
-        realtimeHandlers.handleGenerateVerificationQuestions(args, mockRequestId)
-      ).rejects.toThrow("Tool 'generate_verification_questions' failed: Insufficient transaction history");
-
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestId: mockRequestId,
-          cardToken: 'card_que***',
-          error: 'Insufficient transaction history'
-        }),
-        'MCP tool error: generate_verification_questions'
-      );
-    });
   });
 
   describe('MCP Protocol Compliance Tests', () => {
@@ -569,36 +331,7 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       expect(result.content[0]).toHaveProperty('text');
     });
 
-    test('response content is properly JSON formatted for complex real-time data', async () => {
-      const complexSpendingResult = {
-        patterns: [
-          { type: 'velocity', value: 5.2, trend: 'increasing', confidence: 0.9 },
-          { type: 'amount_distribution', buckets: [10, 25, 50, 100], frequency: [2, 5, 3, 1] }
-        ],
-        deviations: [
-          { type: 'time_anomaly', severity: 'high', details: 'Purchase at 3 AM unusual' }
-        ],
-        baseline: { daily: 120, weekly: 850, monthly: 3400 },
-        predictions: { next24h: 180, confidence: 0.75 },
-        riskIndicators: ['off_hours_activity', 'amount_spike'],
-        summary: 'Complex spending pattern with multiple risk factors'
-      };
-      
-      reportingService.analyzeSpendingPatterns = vi.fn().mockResolvedValue(complexSpendingResult);
 
-      const result = await realtimeHandlers.handleAnalyzeSpendingPatterns(
-        { cardToken: 'card_complex_test' }, 
-        mockRequestId
-      );
-
-      // Verify JSON can be parsed
-      expect(() => JSON.parse(result.content[0].text)).not.toThrow();
-      
-      const parsedContent = JSON.parse(result.content[0].text);
-      expect(parsedContent.spendingPatternAnalysis.patterns).toEqual(complexSpendingResult.patterns);
-      expect(parsedContent.spendingPatternAnalysis.deviations).toEqual(complexSpendingResult.deviations);
-      expect(parsedContent.metadata.requestId).toBe(mockRequestId);
-    });
 
     test('handles arrays and complex parameters in MCP format', async () => {
       const complexArgs = {
@@ -625,28 +358,7 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
   });
 
   describe('Performance Tests', () => {
-    test('real-time handlers complete within acceptable time limits', async () => {
-      const args = { cardToken: 'card_performance_test' };
-      
-      // Mock service with simulated real-time processing delay
-      reportingService.analyzeSpendingPatterns = vi.fn().mockImplementation(async () => {
-        await new Promise(resolve => setTimeout(resolve, 75));
-        return {
-          patterns: [{ type: 'test', value: 100 }],
-          deviations: [],
-          baseline: {},
-          riskIndicators: [],
-          summary: 'Performance test result'
-        };
-      });
 
-      const startTime = Date.now();
-      await realtimeHandlers.handleAnalyzeSpendingPatterns(args, mockRequestId);
-      const endTime = Date.now();
-
-      // Real-time handlers should complete within 200ms (including 75ms service time)
-      expect(endTime - startTime).toBeLessThan(200);
-    });
 
     test('alert subscription handles multiple card tokens efficiently', async () => {
       const args = {
@@ -672,37 +384,7 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       expect(parsedResponse.alertSubscription.cardTokens).toHaveLength(50);
     });
 
-    test('verification question generation handles complex requests efficiently', async () => {
-      const args = {
-        cardToken: 'card_complex_verification',
-        questionType: 'mixed',
-        questionCount: 10,
-        timeframe: '90d',
-        adaptToScammerTactics: true
-      };
 
-      const complexQuestions = {
-        questions: Array.from({ length: 10 }, (_, i) => ({
-          question: `Complex question ${i}`,
-          type: 'mixed',
-          difficulty: 'medium'
-        })),
-        transactionHistoryAnalyzed: 200,
-        patternsUsed: ['merchants', 'amounts', 'timing', 'locations'],
-        scammerAdaptations: ['multiple_tactics'],
-        usageInstructions: 'Complex instructions',
-        effectiveness: { confidence: 0.88 }
-      };
-
-      reportingService.generateQuestions = vi.fn().mockResolvedValue(complexQuestions);
-
-      const startTime = Date.now();
-      await realtimeHandlers.handleGenerateVerificationQuestions(args, mockRequestId);
-      const endTime = Date.now();
-
-      // Should handle complex question generation within reasonable time
-      expect(endTime - startTime).toBeLessThan(250);
-    });
   });
 
   describe('Edge Cases Tests', () => {
@@ -743,75 +425,6 @@ describe('Real-time Intelligence Handlers - MCP Tool Implementation', () => {
       expect(parsedResponse.liveTransactionFeed.initialTransactions).toEqual([]);
     });
 
-    test('handles spending pattern analysis with minimal data', async () => {
-      const args = { cardToken: 'card_minimal_data' };
 
-      reportingService.analyzeSpendingPatterns = vi.fn().mockResolvedValue({
-        patterns: [],
-        deviations: [],
-        baseline: null,
-        riskIndicators: [],
-        summary: 'Insufficient data for comprehensive analysis'
-      });
-
-      const result = await realtimeHandlers.handleAnalyzeSpendingPatterns(args, mockRequestId);
-
-      const parsedResponse = JSON.parse(result.content[0].text);
-      expect(parsedResponse.spendingPatternAnalysis.patterns).toEqual([]);
-      expect(parsedResponse.spendingPatternAnalysis.baseline).toBeNull();
-      expect(parsedResponse.spendingPatternAnalysis.summary).toBe('Insufficient data for comprehensive analysis');
-    });
-
-    test('handles verification questions with insufficient transaction history', async () => {
-      const args = { cardToken: 'card_new_account' };
-
-      reportingService.generateQuestions = vi.fn().mockResolvedValue({
-        questions: [
-          { question: 'What is your preferred spending category?', type: 'general' }
-        ],
-        transactionHistoryAnalyzed: 2,
-        patternsUsed: [],
-        usageInstructions: 'Limited questions due to insufficient history',
-        effectiveness: { confidence: 0.3, note: 'Low confidence due to limited data' }
-      });
-
-      const result = await realtimeHandlers.handleGenerateVerificationQuestions(args, mockRequestId);
-
-      const parsedResponse = JSON.parse(result.content[0].text);
-      expect(parsedResponse.verificationQuestions.questionSet.questions).toHaveLength(1);
-      expect(parsedResponse.verificationQuestions.generationContext.transactionHistoryAnalyzed).toBe(2);
-      expect(parsedResponse.verificationQuestions.effectiveness.confidence).toBe(0.3);
-    });
-
-    test('handles missing optional parameters gracefully', async () => {
-      const minimalArgs = { cardToken: 'card_defaults_test' };
-
-      reportingService.analyzeSpendingPatterns = vi.fn().mockResolvedValue({
-        patterns: [{ type: 'default', value: 50 }],
-        deviations: [],
-        baseline: { average: 45 },
-        riskIndicators: [],
-        summary: 'Standard analysis with defaults'
-      });
-
-      const result = await realtimeHandlers.handleAnalyzeSpendingPatterns(minimalArgs, mockRequestId);
-
-      // Verify defaults applied
-      expect(reportingService.analyzeSpendingPatterns).toHaveBeenCalledWith(
-        expect.objectContaining({
-          analysisType: 'comprehensive',
-          timeWindow: '24h',
-          includeBaseline: true,
-          deviationThreshold: 0.6,
-          includePredictions: true,
-          realTimeMode: false
-        }),
-        mockRequestId
-      );
-
-      const parsedResponse = JSON.parse(result.content[0].text);
-      expect(parsedResponse.spendingPatternAnalysis.baseline).toEqual({ average: 45 });
-      expect(parsedResponse.spendingPatternAnalysis.realTimeMonitoring).toBeUndefined();
-    });
   });
 }); 

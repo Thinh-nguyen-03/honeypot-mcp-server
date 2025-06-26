@@ -152,3 +152,6 @@ Thumbs.db
 # Project-specific exclusions
 .cursor/
 supabase-mcp/
+
+# Archive directory (internal project documentation)
+.archive/

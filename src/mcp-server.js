@@ -138,25 +138,11 @@ function createMcpServer() {
         case 'get_transaction_details':
           return await transactionHandlers.handleGetTransactionDetails(args, requestId);
           
-        // Pattern Analysis Tools
-        case 'analyze_transaction_patterns':
-          return await patternAnalysisHandlers.handleAnalyzeTransactionPatterns(args, requestId);
-        case 'detect_fraud_indicators':
-          return await patternAnalysisHandlers.handleDetectFraudIndicators(args, requestId);
-        case 'generate_merchant_intelligence':
-          return await patternAnalysisHandlers.handleGenerateMerchantIntelligence(args, requestId);
-        case 'perform_risk_assessment':
-          return await patternAnalysisHandlers.handlePerformRiskAssessment(args, requestId);
-          
         // Real-time Intelligence Tools
         case 'subscribe_to_alerts':
           return await realtimeIntelligenceHandlers.handleSubscribeToAlerts(args, requestId);
         case 'get_live_transaction_feed':
           return await realtimeIntelligenceHandlers.handleGetLiveTransactionFeed(args, requestId);
-        case 'analyze_spending_patterns':
-          return await realtimeIntelligenceHandlers.handleAnalyzeSpendingPatterns(args, requestId);
-        case 'generate_verification_questions':
-          return await realtimeIntelligenceHandlers.handleGenerateVerificationQuestions(args, requestId);
           
         default:
           const error = new Error(`Unknown tool: ${name}`);
@@ -564,7 +550,7 @@ async function main() {
           serverName: "honeypot-transaction-intelligence",
           version: "1.0.0",
           capabilities: ["tools"],
-          toolCount: 18,
+          toolCount: 13,
           transport: "http",
           port: port,
           endpoints: {
@@ -585,7 +571,7 @@ async function main() {
         serverName: "honeypot-transaction-intelligence",
         version: "1.0.0",
         capabilities: ["tools"],
-        toolCount: 18,
+        toolCount: 13,
         transport: "stdio"
       }, 'Honeypot MCP Server started successfully');
     }

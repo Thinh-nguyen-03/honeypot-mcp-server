@@ -20,10 +20,10 @@
 
 ## Introduction
 
-The Honeypot MCP Server API provides AI agents with sophisticated fraud detection capabilities through 18 specialized tools. Built on the Model Context Protocol (MCP), this enterprise-grade platform enables real-time transaction monitoring, pattern analysis, and fraud investigation workflows.
+The Honeypot MCP Server API provides AI agents with sophisticated fraud detection capabilities through 13 specialized tools. Built on the Model Context Protocol (MCP), this enterprise-grade platform enables real-time transaction monitoring, card management, and fraud investigation workflows.
 
 ### Core Capabilities
-- **18 Specialized Tools**: Comprehensive fraud detection and transaction intelligence
+- **13 Specialized Tools**: Comprehensive transaction monitoring and card management
 - **Real-Time Processing**: Sub-200ms response times for critical operations
 - **Enterprise Security**: PCI DSS compliant data handling with comprehensive audit trails
 - **AI-Native Design**: Purpose-built for conversational AI and agent interactions
@@ -64,7 +64,7 @@ const client = new Client({
 
 await client.connect(transport);
 const tools = await client.listTools();
-console.log(`Connected! ${tools.tools.length} tools available.`);
+console.log(`Connected! ${tools.tools.length} tools available.`); // Should be 13
 ```
 
 ### Health Verification
@@ -146,7 +146,7 @@ const toolList = await client.listTools();
         }
       }
     }
-    // ... 17 additional tools
+    // ... 12 additional tools
   ]
 }
 ```
@@ -377,71 +377,7 @@ const transactions = await client.callTool({
 }
 ```
 
-### Pattern Analysis Tools
 
-#### `analyze_transaction_patterns`
-**Purpose**: Detect behavioral patterns in transaction history  
-**Business Use**: Fraud pattern identification and behavioral analysis
-
-**Parameters:**
-```typescript
-{
-  cardToken: string       // Required: Card to analyze
-  analysisWindow?: string // Default: '30d' (7d, 14d, 30d, 90d)
-  patternTypes?: string[] // Optional: Specific pattern types to detect
-}
-```
-
-**Example:**
-```javascript
-const patterns = await client.callTool({
-  name: 'analyze_transaction_patterns',
-  arguments: {
-    cardToken: 'card_12345',
-    analysisWindow: '7d',
-    patternTypes: ['velocity', 'amount', 'merchant', 'geographic']
-  }
-});
-```
-
-#### `detect_fraud_indicators`
-**Purpose**: AI-powered fraud scoring and risk assessment  
-**Business Use**: Automated fraud detection and risk prioritization
-
-**Parameters:**
-```typescript
-{
-  cardToken: string       // Required: Card to analyze
-  lookbackDays?: number   // Default: 30
-  threshold?: string      // Default: 'medium' (low, medium, high)
-}
-```
-
-#### `generate_merchant_intelligence`
-**Purpose**: Comprehensive merchant analysis and reputation scoring  
-**Business Use**: Merchant risk assessment and verification
-
-**Parameters:**
-```typescript
-{
-  merchantName: string    // Required: Merchant to analyze
-  cardToken?: string      // Optional: Specific card context
-  includeIndustryData?: boolean // Default: true
-}
-```
-
-#### `perform_risk_assessment`
-**Purpose**: Holistic risk evaluation combining multiple data sources  
-**Business Use**: Enterprise risk management and decision support
-
-**Parameters:**
-```typescript
-{
-  cardToken: string       // Required: Primary analysis target
-  assessmentType?: string // Default: 'comprehensive'
-  includeRecommendations?: boolean // Default: true
-}
-```
 
 ### Real-Time Intelligence Tools
 
@@ -471,32 +407,7 @@ const patterns = await client.callTool({
 }
 ```
 
-#### `analyze_spending_patterns`
-**Purpose**: Real-time behavioral analysis and pattern detection  
-**Business Use**: Dynamic fraud detection and behavior monitoring
 
-**Parameters:**
-```typescript
-{
-  cardToken: string       // Required: Card to monitor
-  timeWindow?: number     // Default: 24 (hours)
-  patternSensitivity?: string // Default: 'medium'
-}
-```
-
-#### `generate_verification_questions`
-**Purpose**: AI-generated verification questions for fraud investigation  
-**Business Use**: Cardholder verification and fraud confirmation
-
-**Parameters:**
-```typescript
-{
-  cardToken: string       // Required: Card context
-  transactionToken?: string // Optional: Specific transaction context
-  questionCount?: number  // Default: 3, max: 5
-  difficulty?: string     // Default: 'medium' (easy, medium, hard)
-}
-```
 
 ---
 
@@ -571,7 +482,6 @@ const patterns = await client.callTool({
 - **Health Check**: < 50ms
 - **Card Operations**: < 150ms
 - **Transaction Queries**: < 200ms
-- **Pattern Analysis**: < 200ms
 - **Real-time Operations**: < 100ms
 
 ### Rate Limits
@@ -589,7 +499,7 @@ const patterns = await client.callTool({
 
 ## Integration Examples
 
-### Fraud Investigation Workflow
+### Transaction Investigation Workflow
 ```javascript
 // Step 1: Get card details
 const card = await client.callTool({
@@ -603,33 +513,34 @@ const recent = await client.callTool({
   arguments: { cardToken: 'card_suspect_123', limit: 20 }
 });
 
-// Step 3: Detect fraud indicators
-const fraudAnalysis = await client.callTool({
-  name: 'detect_fraud_indicators',
+// Step 3: Search for suspicious patterns
+const searchResults = await client.callTool({
+  name: 'search_transactions',
   arguments: { 
     cardToken: 'card_suspect_123',
-    threshold: 'high'
+    minAmount: 10000,  // $100+
+    startDate: '2024-01-01T00:00:00Z'
   }
 });
 
-// Step 4: Generate verification questions
-const verification = await client.callTool({
-  name: 'generate_verification_questions',
+// Step 4: Get detailed transaction information
+const details = await client.callTool({
+  name: 'get_transaction_details',
   arguments: { 
-    cardToken: 'card_suspect_123',
-    questionCount: 5
+    transactionToken: 'txn_suspect_456'
   }
 });
 ```
 
 ### Real-time Monitoring Setup
 ```javascript
-// Subscribe to critical alerts
+// Subscribe to transaction alerts
 const alertSub = await client.callTool({
   name: 'subscribe_to_alerts',
   arguments: { 
-    severity: 'high',
-    alertTypes: ['fraud_detected', 'unusual_spending', 'velocity_alert']
+    cardTokens: ['card_123', 'card_456'],
+    alertTypes: ['fraud_detected', 'unusual_pattern'],
+    riskThreshold: 0.8
   }
 });
 
@@ -637,8 +548,9 @@ const alertSub = await client.callTool({
 const liveFeed = await client.callTool({
   name: 'get_live_transaction_feed',
   arguments: { 
-    duration: 300,  // 5 minutes
-    includeDetails: true
+    feedDuration: '15m',
+    includeRealTimeAnalysis: true,
+    maxTransactionsPerMinute: 20
   }
 });
 ```
@@ -684,7 +596,7 @@ console.log('Has Lithic Key:', !!process.env.LITHIC_API_KEY);
 
 ### Version 1.0.0
 - Initial enterprise release
-- 18 specialized fraud detection tools
+- 13 specialized transaction monitoring tools
 - Full MCP protocol implementation
 - Production-ready security and monitoring
 

@@ -1,21 +1,20 @@
 # Honeypot MCP Server - Technical Tool Reference
-## Complete Developer Guide to All 19 MCP Functions
+## Complete Developer Guide to All 13 MCP Functions
 
 ---
 
 ## Overview
 
-The Honeypot MCP Server provides 19 specialized tools accessible through the Model Context Protocol (MCP). These tools enable comprehensive fraud detection, transaction analysis, card management, and real-time intelligence gathering. This document provides detailed technical specifications for each tool, including parameters, return data, and usage examples.
+The Honeypot MCP Server provides 13 specialized tools accessible through the Model Context Protocol (MCP). These tools enable transaction analysis, card management, and real-time intelligence gathering. This document provides detailed technical specifications for each tool, including parameters, return data, and usage examples.
 
 ## Tool Categories
 
-The 19 tools are organized into 5 functional categories:
+The 13 tools are organized into 4 functional categories:
 
 1. **System Tools (1)** - Health monitoring and system diagnostics
 2. **Card Management Tools (5)** - Honeypot card lifecycle management  
 3. **Transaction Query Tools (5)** - Transaction data retrieval and search
-4. **Analysis Tools (4)** - Fraud detection and pattern analysis
-5. **Real-time Tools (4)** - Live monitoring and intelligence gathering
+4. **Real-time Tools (2)** - Live monitoring and alert subscription
 
 ---
 
