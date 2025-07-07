@@ -6,10 +6,12 @@
  * - Message broadcasting to connected agents
  * - Connection health monitoring and cleanup
  * - Alert formatting for AI consumption
+ * - Real-time polling integration for subscription-based alerts
  */
 
 import EventEmitter from 'events';
 import logger from '../utils/logger.js';
+import pollingService from './polling-service.js';
 
 class AlertService extends EventEmitter {
   constructor() {
@@ -172,6 +174,17 @@ class AlertService extends EventEmitter {
       
       // Update metrics
       this.metrics.totalAlertsSent += result.successful;
+      
+      // NEW: Also queue alerts for polling subscriptions
+      try {
+        this.queueAlertsForPolling(cardToken, formattedAlert);
+      } catch (pollingError) {
+        logger.warn({ 
+          error: pollingError.message, 
+          cardToken,
+          alertType: formattedAlert.alertType 
+        }, 'Failed to queue alert for polling subscriptions');
+      }
       
       logger.info({
         cardToken,
@@ -489,14 +502,99 @@ class AlertService extends EventEmitter {
   }
   
   /**
-   * Get service metrics
+   * Queue alerts for relevant polling subscriptions
+   * @param {string} cardToken - Card token that triggered the alert
+   * @param {Object} alert - Formatted alert data
+   */
+  queueAlertsForPolling(cardToken, alert) {
+    try {
+      let queuedCount = 0;
+      
+      for (const [subscriptionId, subscription] of pollingService.subscriptions) {
+        if (!subscription.isActive) continue;
+        
+        const shouldReceive = this.shouldReceiveAlert(subscription, cardToken, alert);
+        if (shouldReceive) {
+          const success = pollingService.queueAlert(subscriptionId, alert);
+          if (success) {
+            queuedCount++;
+          }
+        }
+      }
+      
+      if (queuedCount > 0) {
+        logger.debug({ 
+          cardToken, 
+          alertType: alert.alertType,
+          queuedCount,
+          totalSubscriptions: pollingService.subscriptions.size
+        }, 'Alert queued for polling subscriptions');
+      }
+    } catch (error) {
+      logger.error({ 
+        error: error.message, 
+        cardToken, 
+        alertType: alert?.alertType 
+      }, 'Error queuing alerts for polling');
+      throw error;
+    }
+  }
+  
+  /**
+   * Determine if a subscription should receive an alert
+   * @param {Object} subscription - Subscription configuration
+   * @param {string} cardToken - Card token that triggered the alert
+   * @param {Object} alert - Alert data
+   * @returns {boolean} Whether subscription should receive alert
+   */
+  shouldReceiveAlert(subscription, cardToken, alert) {
+    try {
+      // Check card filter - if cardTokens array is empty, receive all cards
+      if (subscription.cardTokens && subscription.cardTokens.length > 0) {
+        if (!subscription.cardTokens.includes(cardToken)) {
+          return false;
+        }
+      }
+      
+      // Check alert type filter
+      if (subscription.alertTypes && subscription.alertTypes.length > 0) {
+        if (!subscription.alertTypes.includes(alert.alertType)) {
+          return false;
+        }
+      }
+      
+      // Check risk threshold (if applicable and alert has risk score)
+      if (subscription.riskThreshold && alert.riskScore !== undefined) {
+        if (alert.riskScore < subscription.riskThreshold) {
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      logger.error({ 
+        error: error.message, 
+        subscriptionId: subscription.subscriptionId,
+        cardToken,
+        alertType: alert?.alertType 
+      }, 'Error checking if subscription should receive alert');
+      return false;
+    }
+  }
+
+  /**
+   * Get service metrics including polling integration stats
    * @returns {Object} Current service metrics
    */
   getMetrics() {
     return {
       ...this.metrics,
       queuedMessages: Array.from(this.messageQueue.values())
-        .reduce((sum, queue) => sum + queue.length, 0)
+        .reduce((sum, queue) => sum + queue.length, 0),
+      pollingIntegration: {
+        activeSubscriptions: pollingService.subscriptions.size,
+        totalQueuedAlerts: pollingService.getMetrics().totalQueuedAlerts
+      }
     };
   }
   

@@ -11,14 +11,6 @@ import * as reportingService from '../services/reporting-service.js';
 import * as mccService from '../services/mcc-service.js';
 import logger from '../utils/logger.js';
 
-
-
-
-
-
-
-
-
 /**
  * Utility Functions
  */
@@ -120,5 +112,3 @@ function extractMccCodes(transactions) {
   const codes = transactions.map(t => t.merchant_mcc).filter(Boolean);
   return [...new Set(codes)];
 }
-
- 

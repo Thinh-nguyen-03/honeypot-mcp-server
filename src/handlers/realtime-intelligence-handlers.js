@@ -9,6 +9,7 @@
 
 import * as alertService from '../services/alert-service.js';
 import * as reportingService from '../services/reporting-service.js';
+import pollingService from '../services/polling-service.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -38,14 +39,44 @@ export async function handleSubscribeToAlerts(args, requestId) {
       subscriptionDuration: args?.subscriptionDuration || '4h'
     };
     
-    // Simulate subscription creation
+    // Store subscription in polling service for real-time polling
+    try {
+      pollingService.storeSubscription(subscriptionId, {
+        cardTokens: subscriptionParams.cardTokens,
+        alertTypes: subscriptionParams.alertTypes,
+        riskThreshold: subscriptionParams.riskThreshold,
+        duration: subscriptionParams.subscriptionDuration,
+        includeContext: subscriptionParams.includeContext,
+        maxAlertsPerMinute: subscriptionParams.maxAlertsPerMinute
+      });
+      
+      logger.info({ 
+        requestId, 
+        subscriptionId,
+        cardTokenCount: subscriptionParams.cardTokens.length,
+        alertTypes: subscriptionParams.alertTypes
+      }, 'Subscription stored in polling service successfully');
+    } catch (pollingError) {
+      logger.error({ 
+        requestId, 
+        subscriptionId, 
+        error: pollingError.message 
+      }, 'Failed to store subscription in polling service');
+      // Continue without polling - subscription still works for other features
+    }
+    
+    // Create subscription result
     const result = {
       subscriptionId: subscriptionId,
       status: 'active',
       connectionDetails: {
         type: 'polling',
         interval: '30s',
-        endpoint: `/alerts/subscription/${subscriptionId}`
+        endpoint: `/alerts/subscription/${subscriptionId}`,
+        pollingTools: {
+          pollAlerts: 'poll_subscription_alerts',
+          checkStatus: 'get_subscription_status'
+        }
       },
       expiresAt: expirationTime.toISOString()
     };
@@ -70,7 +101,12 @@ export async function handleSubscribeToAlerts(args, requestId) {
               expiresAt: result.expiresAt
             },
             metadata: {
-              note: 'Alert subscription created with simulated alert monitoring',
+              note: 'Alert subscription created with real-time polling capabilities',
+              pollingInstructions: {
+                step1: 'Use poll_subscription_alerts tool to retrieve new alerts',
+                step2: 'Use get_subscription_status tool to monitor subscription health',
+                example: `poll_subscription_alerts({ subscriptionId: "${subscriptionId}" })`
+              },
               timestamp: new Date().toISOString(),
               requestId
             }

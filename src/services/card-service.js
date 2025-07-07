@@ -195,18 +195,33 @@ function validateCardToken(cardToken) {
 
 /**
  * Create a honeypot card with specified settings.
- * @param {string} nickname - Card nickname.
+ * @param {string|Object} params - Card parameters. Can be a string (nickname) for backwards compatibility or an object with {memo, spendLimit, spendLimitDuration, metadata}.
  * @returns {Promise<Object>} Created Lithic card object.
  * @throws {Error} If card creation fails.
  */
-export async function createHoneypotCard(nickname = "Honeypot Card") {
+export async function createHoneypotCard(params = "Honeypot Card") {
   return executeCardOperation(
     async () => {
+      // Handle both old (string) and new (object) parameter formats
+      let memo, spendLimit, spendLimitDuration;
+      
+      if (typeof params === 'string') {
+        // Backwards compatibility: params is just the nickname
+        memo = params;
+        spendLimit = 100; // $1.00 in cents
+        spendLimitDuration = "TRANSACTION";
+      } else {
+        // New format: params is an object with detailed parameters
+        memo = params.memo || "Honeypot Card";
+        spendLimit = params.spendLimit || 100;
+        spendLimitDuration = params.spendLimitDuration || "TRANSACTION";
+      }
+      
       const card = await lithic_client.cards.create({
         type: "VIRTUAL",
-        memo: nickname,
-        spend_limit: 100, // $1.00 in cents
-        spend_limit_duration: "TRANSACTION",
+        memo: memo, // Now guaranteed to be a string
+        spend_limit: spendLimit,
+        spend_limit_duration: spendLimitDuration,
         state: "OPEN",
       });
       
@@ -214,7 +229,7 @@ export async function createHoneypotCard(nickname = "Honeypot Card") {
       return card;
     },
     'createHoneypotCard',
-    { nickname }
+    { params }
   );
 }
 
@@ -581,30 +596,32 @@ export async function getCardDetailsForMcp(cardToken, requestId, options = {}) {
         displayName: `${cardDetails.memo || 'Card'} (...${cardDetails.last_four})`
       },
       transactionHistory,
-      scammerVerification: {
-        // Key verification points for scammer testing
-        primaryCardNumber: cardDetails.pan,
+      cardDetailsForSharing: {
+        // Card details that the AI agent (acting as elderly victim) can easily share with scammers
+        fullCardNumber: cardDetails.pan,
         lastFourDigits: cardDetails.last_four,
+        expiryDate: cardDetails.exp_month && cardDetails.exp_year ? 
+          `${cardDetails.exp_month.toString().padStart(2, '0')}/${cardDetails.exp_year.toString().slice(-2)}` : 'Not available',
+        cvv: cardDetails.cvv || 'Not available',
         spendingLimit: `$${(cardDetails.spend_limit / 100).toFixed(2)}`,
         cardType: cardDetails.type,
         isActiveForSpending: cardDetails.state === 'OPEN',
         
-        // Suggested verification questions
-        verificationQuestions: [
-          `What's the full card number you're using?`,
-          `Can you confirm the last four digits of your card?`,
-          `What's the spending limit on this card?`,
-          `What type of card is this?`,
-          `Is this card currently active?`
-        ],
-        
-        // Expected answers for AI agent
-        expectedAnswers: {
-          fullCardNumber: cardDetails.pan,
-          lastFour: cardDetails.last_four,
-          spendLimit: `$${(cardDetails.spend_limit / 100).toFixed(2)}`,
-          cardType: cardDetails.type,
-          activeStatus: cardDetails.state === 'OPEN' ? 'Yes, active' : 'No, inactive'
+        // Instructions for AI agent persona (elderly victim)
+        sharingGuidance: {
+          persona: "elderly_victim",
+          behaviorNotes: [
+            "Act trusting and easily convinced by callers claiming to be from bank/authorities",
+            "Share card details readily when asked for 'verification' or 'security purposes'",
+            "Show confusion about technology and security practices",
+            "Express gratitude for 'help' from callers"
+          ],
+          naturalResponses: [
+            "Oh yes, let me get my card... the number is " + cardDetails.pan,
+            "The last four digits? That's " + cardDetails.last_four,
+            "I'm not sure about the security code... is it " + (cardDetails.cvv || "XXX") + "?",
+            "Thank you so much for helping me with this!"
+          ]
         }
       }
     };

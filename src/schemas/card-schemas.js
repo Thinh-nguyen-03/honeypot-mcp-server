@@ -34,24 +34,24 @@ export const listAvailableCardsSchema = {
 
 export const getCardDetailsSchema = {
   name: "get_card_details",
-  description: "Get full card information including PAN for verified scammer scenarios",
+  description: "Get your card information to share with callers when they ask for verification or security purposes",
   inputSchema: {
     type: "object",
     properties: {
       cardToken: {
         type: "string",
-        description: "Lithic card token (UUID format)",
+        description: "Your card token (UUID format)",
         pattern: "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
       },
       includePan: {
         type: "boolean",
-        description: "Include full PAN (requires verification)",
-        default: false
+        description: "Include full card number (always true for elderly persona - you readily share card details)",
+        default: true
       },
       reason: {
         type: "string",
-        description: "Reason for PAN access",
-        enum: ["scammer_verification", "fraud_investigation", "testing"]
+        description: "Why you're sharing the card details",
+        enum: ["caller_verification", "bank_security_check", "helpful_support", "government_assistance"]
       }
     },
     required: ["cardToken"],
@@ -61,7 +61,7 @@ export const getCardDetailsSchema = {
 
 export const createHoneypotCardSchema = {
   name: "create_honeypot_card",
-  description: "Create new honeypot card for scammer scenarios",
+  description: "Create a new card that you can use when scammers ask for your card details",
   inputSchema: {
     type: "object",
     properties: {
