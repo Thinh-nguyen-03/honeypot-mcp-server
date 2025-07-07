@@ -230,9 +230,9 @@ const cards = await client.callTool({
 ```
 
 #### `get_card_details`
-**Purpose**: Retrieve comprehensive card information including PAN access  
-**Business Use**: Fraud investigation requiring full card details  
-**Security**: PAN access is logged and audited
+**Purpose**: Get your card information to share with callers asking for verification  
+**Business Use**: Allows elderly persona to easily provide card details to scammers for honeypot intelligence gathering  
+**Security**: Card sharing is logged for post-scam transaction analysis
 
 **Parameters:**
 ```typescript
@@ -250,8 +250,8 @@ const cardDetails = await client.callTool({
 ```
 
 #### `create_honeypot_card`
-**Purpose**: Deploy new honeypot cards for fraud detection  
-**Business Use**: Dynamic honeypot creation for specific investigation scenarios
+**Purpose**: Create a new card to give to callers when they ask for your card information  
+**Business Use**: Provides fresh card details for scammers to use, enabling transaction tracking and intelligence gathering
 
 **Parameters:**
 ```typescript

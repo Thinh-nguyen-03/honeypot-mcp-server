@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Honeypot MCP Server is a transaction monitoring system built on the Model Context Protocol (MCP). It provides AI agents with tools to monitor and analyze transactions from Lithic honeypot cards for fraud detection and investigation purposes.
+The Honeypot MCP Server is a transaction intelligence system built on the Model Context Protocol (MCP). It enables AI agents acting as vulnerable elderly personas to provide card details to scammers, then monitors and analyzes the resulting fraudulent transactions to gather intelligence about scammer operations and methods.
 
 ## Features
 
