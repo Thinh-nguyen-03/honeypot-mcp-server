@@ -31,6 +31,8 @@ import { patternAnalysisToolSchemas } from './schemas/pattern-analysis-schemas.j
 import * as patternAnalysisHandlers from './handlers/pattern-analysis-handlers.js';
 import { realtimeIntelligenceToolSchemas } from './schemas/realtime-intelligence-schemas.js';
 import * as realtimeIntelligenceHandlers from './handlers/realtime-intelligence-handlers.js';
+import { pollingToolSchemas } from './schemas/polling-schemas.js';
+import * as pollingHandlers from './handlers/polling-handlers.js';
 
 
 
@@ -91,7 +93,8 @@ function createMcpServer() {
         ...cardToolSchemas,
         ...transactionToolSchemas,
         ...patternAnalysisToolSchemas,
-        ...realtimeIntelligenceToolSchemas
+        ...realtimeIntelligenceToolSchemas,
+        ...pollingToolSchemas
       ]
     };
   });
@@ -143,6 +146,16 @@ function createMcpServer() {
           return await realtimeIntelligenceHandlers.handleSubscribeToAlerts(args, requestId);
         case 'get_live_transaction_feed':
           return await realtimeIntelligenceHandlers.handleGetLiveTransactionFeed(args, requestId);
+          
+        // Real-time Polling Tools
+        case 'poll_subscription_alerts':
+          return await pollingHandlers.handlePollSubscriptionAlerts(args, requestId);
+        case 'get_subscription_status':
+          return await pollingHandlers.handleGetSubscriptionStatus(args, requestId);
+        case 'poll_live_feed':
+          return await pollingHandlers.handlePollLiveFeed(args, requestId);
+        case 'get_polling_metrics':
+          return await pollingHandlers.handleGetPollingMetrics(args, requestId);
           
         default:
           const error = new Error(`Unknown tool: ${name}`);
